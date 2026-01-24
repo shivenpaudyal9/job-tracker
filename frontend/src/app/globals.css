@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 248, 250, 252;
+  --background-secondary: 241, 245, 249;
+  --background-tertiary: 226, 232, 240;
+  --foreground: 15, 23, 42;
+  --foreground-secondary: 51, 65, 85;
+  --foreground-muted: 100, 116, 139;
+}
+
+.dark {
+  --background: 15, 23, 42;
+  --background-secondary: 30, 41, 59;
+  --background-tertiary: 51, 65, 85;
+  --foreground: 248, 250, 252;
+  --foreground-secondary: 203, 213, 225;
+  --foreground-muted: 100, 116, 139;
+}
+
+html, body {
+  background-color: rgb(var(--background)) !important;
+  color: rgb(var(--foreground)) !important;
+}
+
+@layer base {
+  * {
+    border-color: rgb(var(--foreground-muted) / 0.2);
+  }
+
+  body {
+    @apply antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer utilities {
+  .glass {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+  }
+
+  .dark .glass {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .glass-dark {
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary-400 to-accent-500;
+  }
+
+  .shadow-glow {
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.3);
+  }
+
+  .shadow-glow-purple {
+    box-shadow: 0 0 30px rgba(147, 51, 234, 0.4);
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: rgb(var(--background-secondary) / 1);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgb(var(--foreground-muted) / 1);
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(var(--foreground-secondary) / 1);
+}
+
+/* Smooth transitions */
+* {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
