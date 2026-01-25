@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Briefcase, Zap, Target, TrendingUp, Mail, CheckCircle2, ArrowRight, LogIn } from 'lucide-react'
+import { Briefcase, Zap, Target, TrendingUp, Mail, CheckCircle2, ArrowRight, LogIn, Shield, X, ExternalLink, Key, Settings, UserCheck } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { api } from '@/lib/api'
@@ -14,6 +14,7 @@ export default function LandingPage() {
   const { isAuthenticated, user, isLoading: authLoading } = useAuth()
   const [isConnected, setIsConnected] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [showHowItWorks, setShowHowItWorks] = useState(false)
 
   useEffect(() => {
     // Only check sync status if authenticated
@@ -154,7 +155,7 @@ export default function LandingPage() {
                   <Zap className="w-5 h-5 mr-2" />
                   {isConnected ? 'Open Dashboard' : 'Start Free'}
                 </Button>
-                <Button size="lg" variant="outline" onClick={() => router.push('/setup')}>
+                <Button size="lg" variant="outline" onClick={() => setShowHowItWorks(true)}>
                   See How It Works
                 </Button>
               </div>
@@ -277,6 +278,160 @@ export default function LandingPage() {
           </div>
         </footer>
       </div>
+
+      {/* How It Works Modal */}
+      {showHowItWorks && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-background-secondary border border-foreground-muted/20 rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+          >
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-background-secondary border-b border-foreground-muted/10 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-2xl font-bold">How Email Access Works</h2>
+              <button
+                onClick={() => setShowHowItWorks(false)}
+                className="p-2 hover:bg-foreground-muted/10 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-8">
+              {/* Security Notice */}
+              <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <Shield className="w-6 h-6 text-green-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h3 className="font-semibold text-green-400 mb-1">100% Secure & Private</h3>
+                    <p className="text-sm text-foreground-secondary">
+                      We use Microsoft's official OAuth2 authentication. We never see your password,
+                      only get read-only access to your emails, and you can revoke access anytime.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 1: Azure Setup */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-primary-500 flex items-center justify-center text-sm font-bold">1</div>
+                  <h3 className="text-xl font-semibold">Create Azure App Registration</h3>
+                </div>
+                <div className="ml-11 space-y-3">
+                  <p className="text-foreground-secondary">
+                    First, you need to create an app in Microsoft Azure (free) to allow Job Tracker to read your emails:
+                  </p>
+                  <ol className="list-decimal list-inside space-y-2 text-foreground-secondary">
+                    <li>Go to <a href="https://portal.azure.com" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:underline inline-flex items-center gap-1">portal.azure.com <ExternalLink className="w-3 h-3" /></a></li>
+                    <li>Search for <strong>"App registrations"</strong> and click it</li>
+                    <li>Click <strong>"+ New registration"</strong></li>
+                    <li>Name it <strong>"Job Tracker"</strong></li>
+                    <li>Select <strong>"Personal Microsoft accounts only"</strong></li>
+                    <li>Redirect URI: Web → <code className="bg-background px-2 py-0.5 rounded text-sm">http://localhost:8000/callback</code></li>
+                    <li>Click <strong>Register</strong></li>
+                  </ol>
+                </div>
+              </div>
+
+              {/* Step 2: Get Credentials */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-primary-500 flex items-center justify-center text-sm font-bold">2</div>
+                  <h3 className="text-xl font-semibold">Get Your Credentials</h3>
+                </div>
+                <div className="ml-11 space-y-3">
+                  <div className="flex items-start gap-3 p-3 bg-background rounded-lg">
+                    <Key className="w-5 h-5 text-primary-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium">Client ID</p>
+                      <p className="text-sm text-foreground-secondary">Copy from the Overview page → "Application (client) ID"</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-3 bg-background rounded-lg">
+                    <Key className="w-5 h-5 text-accent-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium">Client Secret</p>
+                      <p className="text-sm text-foreground-secondary">Go to "Certificates & secrets" → "+ New client secret" → Copy the Value immediately</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 3: Set Permissions */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-primary-500 flex items-center justify-center text-sm font-bold">3</div>
+                  <h3 className="text-xl font-semibold">Set API Permissions</h3>
+                </div>
+                <div className="ml-11 space-y-3">
+                  <p className="text-foreground-secondary">
+                    Go to "API permissions" → "Add a permission" → "Microsoft Graph" → "Delegated permissions"
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="p-3 bg-background rounded-lg text-center">
+                      <Mail className="w-6 h-6 mx-auto mb-2 text-blue-400" />
+                      <p className="font-medium text-sm">Mail.Read</p>
+                      <p className="text-xs text-foreground-muted">Read your emails</p>
+                    </div>
+                    <div className="p-3 bg-background rounded-lg text-center">
+                      <UserCheck className="w-6 h-6 mx-auto mb-2 text-green-400" />
+                      <p className="font-medium text-sm">User.Read</p>
+                      <p className="text-xs text-foreground-muted">Read your profile</p>
+                    </div>
+                    <div className="p-3 bg-background rounded-lg text-center">
+                      <Settings className="w-6 h-6 mx-auto mb-2 text-purple-400" />
+                      <p className="font-medium text-sm">offline_access</p>
+                      <p className="text-xs text-foreground-muted">Stay connected</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-foreground-secondary">
+                    Then go to "Authentication" → Enable <strong>"Allow public client flows"</strong> → Save
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 4: Connect */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-primary-500 flex items-center justify-center text-sm font-bold">4</div>
+                  <h3 className="text-xl font-semibold">Connect Your Account</h3>
+                </div>
+                <div className="ml-11 space-y-3">
+                  <p className="text-foreground-secondary">
+                    After setting up Azure, add your credentials to <code className="bg-background px-2 py-0.5 rounded text-sm">backend/.env</code>,
+                    then come back here and click "Get Started" to connect your Outlook account.
+                  </p>
+                  <p className="text-foreground-secondary">
+                    You'll be shown a device code to enter at Microsoft's website - this is the safest way to authenticate without ever sharing your password.
+                  </p>
+                </div>
+              </div>
+
+              {/* Revoke Access */}
+              <div className="bg-foreground-muted/5 border border-foreground-muted/10 rounded-xl p-4">
+                <h4 className="font-semibold mb-2">🔐 Want to Revoke Access?</h4>
+                <p className="text-sm text-foreground-secondary">
+                  You can remove Job Tracker's access anytime at:{' '}
+                  <a href="https://account.microsoft.com/privacy/app-access" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:underline inline-flex items-center gap-1">
+                    account.microsoft.com/privacy/app-access <ExternalLink className="w-3 h-3" />
+                  </a>
+                </p>
+              </div>
+
+              {/* CTA */}
+              <div className="flex justify-center pt-4">
+                <Button size="lg" onClick={() => { setShowHowItWorks(false); handleGetStarted(); }}>
+                  <Zap className="w-5 h-5 mr-2" />
+                  Get Started Now
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   )
 }
