@@ -14,3 +14,7 @@ python-jose[cryptography]==3.3.0
 pydantic[email]==2.5.3
 # PostgreSQL for production
 psycopg2-binary==2.9.9
+# Production server
+gunicorn==21.2.0
+# Groq for AI extraction
+groq==0.4.2
