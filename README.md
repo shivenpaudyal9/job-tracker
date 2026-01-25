@@ -16,6 +16,104 @@
 - 📥 **Excel Export**: Download all applications as formatted spreadsheet
 - 🔒 **100% Secure**: OAuth2 device code flow, no password storage
 
+## 👀 See How It Works - Email Access Setup
+
+To use Job Tracker, you need to grant the app permission to read your Outlook emails. This is done securely through Microsoft's OAuth2 system - **the app never sees your password**.
+
+### Step 1: Create an Azure App Registration (One-time Setup)
+
+1. **Go to Azure Portal**: https://portal.azure.com
+   - Sign in with your Microsoft account (the one with your job emails)
+
+2. **Navigate to App Registrations**:
+   - Search "App registrations" in the top search bar
+   - Click on "App registrations"
+
+3. **Create New Registration**:
+   - Click "+ New registration"
+   - **Name**: `Job Tracker` (or any name you prefer)
+   - **Supported account types**: Select **"Personal Microsoft accounts only"** ⚠️ Important!
+   - **Redirect URI**:
+     - Platform: `Web`
+     - URL: `http://localhost:8000/callback`
+   - Click **Register**
+
+4. **Get Your Client ID**:
+   - On the Overview page, copy the **Application (client) ID**
+   - Save this - you'll need it for `.env`
+
+5. **Create a Client Secret**:
+   - Go to **Certificates & secrets** (left sidebar)
+   - Click **+ New client secret**
+   - Description: `Job Tracker Secret`
+   - Expires: Choose duration (recommended: 24 months)
+   - Click **Add**
+   - ⚠️ **IMMEDIATELY copy the Value** (you won't see it again!)
+   - Save this - you'll need it for `.env`
+
+6. **Set API Permissions**:
+   - Go to **API permissions** (left sidebar)
+   - Click **+ Add a permission**
+   - Select **Microsoft Graph**
+   - Select **Delegated permissions** (NOT Application permissions)
+   - Search and add these permissions:
+     - ✅ `Mail.Read` - Read user's emails
+     - ✅ `User.Read` - Read user profile
+     - ✅ `offline_access` - Maintain access (for token refresh)
+   - Click **Add permissions**
+
+7. **Enable Public Client Flows**:
+   - Go to **Authentication** (left sidebar)
+   - Scroll to **Advanced settings**
+   - Set **"Allow public client flows"** to **Yes**
+   - Click **Save**
+
+### Step 2: Configure Your Environment
+
+Create/update `backend/.env` with your credentials:
+
+```bash
+# Microsoft Graph API
+MICROSOFT_CLIENT_ID=paste-your-client-id-here
+MICROSOFT_CLIENT_SECRET=paste-your-client-secret-here
+MICROSOFT_TENANT_ID=consumers
+MICROSOFT_USER_EMAIL=your-outlook-email@outlook.com
+
+# Database
+DATABASE_URL=sqlite:///./jobtracker.db
+
+# Optional: AI Extraction (Groq - Free)
+GROQ_API_KEY=your-groq-api-key  # Get free key at console.groq.com
+
+# App Settings
+DEBUG=True
+```
+
+### Step 3: Connect Your Account (In App)
+
+1. Start the app (backend + frontend)
+2. Go to http://localhost:3000
+3. Click **"Get Started"** → **"Connect Outlook"**
+4. You'll see a device code (e.g., `ABC123XY`)
+5. Click **"Open Microsoft Login"** → Opens microsoft.com/devicelogin
+6. Enter the code and sign in with your Outlook account
+7. **Review permissions** - You'll see:
+   - "Read your mail" ✅
+   - "Maintain access to data" ✅
+   - "Sign you in and read your profile" ✅
+8. Click **Accept**
+9. Return to the app - it will show **"Successfully connected!"**
+
+### 🔒 Security Notes
+
+- ✅ **No password stored**: We use OAuth2 device code flow
+- ✅ **Read-only access**: The app can only READ emails, not send/delete
+- ✅ **Token-based**: Access tokens expire and auto-refresh
+- ✅ **Revoke anytime**: Go to https://account.microsoft.com/privacy/app-access to remove access
+- ✅ **Your data stays local**: Emails are processed on your machine, not uploaded anywhere
+
+---
+
 ## 🏗️ Architecture
 
 ### Backend (Python + FastAPI)
