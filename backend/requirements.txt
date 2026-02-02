@@ -19,3 +19,6 @@ psycopg2-binary==2.9.9
 gunicorn==21.2.0
 # Groq for AI extraction
 groq==0.4.2
+# HTML parsing
+beautifulsoup4==4.12.2
+lxml==5.1.0
