@@ -12,7 +12,7 @@ This time, we'll do it RIGHT.
 ### Go to Azure Portal
 **URL:** https://portal.azure.com
 
-**Sign in** with your personal Microsoft account (nkagami19@outlook.com)
+**Sign in** with your personal Microsoft account
 
 ### Navigate to App Registrations
 1. In the search bar at top, type: **"App registrations"**
@@ -98,7 +98,7 @@ Add these to your `.env` file:
 MICROSOFT_CLIENT_ID=paste_your_client_id_here
 MICROSOFT_CLIENT_SECRET=paste_your_secret_value_here
 MICROSOFT_TENANT_ID=consumers
-MICROSOFT_USER_EMAIL=nkagami19@outlook.com
+MICROSOFT_USER_EMAIL=your-outlook-email@outlook.com
 ```
 
 **Important:** Set `MICROSOFT_TENANT_ID=consumers` (this is special for personal accounts!)

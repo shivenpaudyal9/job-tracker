@@ -4,6 +4,16 @@
 
 ![Job Tracker](https://img.shields.io/badge/Version-2.0-blue) ![Python](https://img.shields.io/badge/Python-3.14-green) ![Next.js](https://img.shields.io/badge/Next.js-14-black) ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
 
+## 🌐 Live Demo
+
+Try the app without any setup:
+
+- **Frontend**: https://job-tracker-orpin-pi.vercel.app/
+- **Backend API**: https://job-tracker-5cjf.onrender.com
+- **API Docs**: https://job-tracker-5cjf.onrender.com/docs
+
+> **Note**: The backend on Render may take 30-60 seconds to wake up on first request (free tier).
+
 ## ✨ Features
 
 - ✅ **Auto Email Sync**: Automatically fetch and process job emails from personal Outlook
@@ -206,15 +216,21 @@ MICROSOFT_USER_EMAIL=your-outlook-email@outlook.com
 ## 🎯 Usage
 
 ### First Time Setup
-1. **Start both servers** (backend + frontend as shown above)
-2. **Open app**: http://localhost:3000
-3. **Click "Get Started"** on landing page
+
+**Using Hosted Version:**
+1. Go to https://job-tracker-orpin-pi.vercel.app/
+2. Click **"Get Started"** on landing page
+
+**Using Local Version:**
+1. Start both servers (backend + frontend as shown in Installation)
+2. Open http://localhost:3000
+3. Click **"Get Started"** on landing page
 4. **Connect Outlook**:
    - Click "Start Connection"
-   - Device code will appear (e.g., `ABC123XY`)
+   - A device code will appear (e.g., `ABC123XY`)
    - Click "Open Microsoft Login" → Opens microsoft.com/devicelogin
    - Enter the code
-   - Sign in with `nkagami19@outlook.com`
+   - Sign in with **your own Outlook/Microsoft account**
    - Grant permissions
    - Wait for "Successfully connected!" ✅
 5. **Run First Sync**:
@@ -224,7 +240,9 @@ MICROSOFT_USER_EMAIL=your-outlook-email@outlook.com
 6. **View Dashboard**: Click "Go to Dashboard"
 
 ### Daily Use
-1. Open http://localhost:3000/dashboard
+1. Open the dashboard:
+   - **Hosted**: https://job-tracker-orpin-pi.vercel.app/dashboard
+   - **Local**: http://localhost:3000/dashboard
 2. Click **"Sync Now"** to fetch new emails
 3. Use **filters** to find applications
 4. Review **action items** (interviews, assessments)
@@ -407,21 +425,51 @@ job-tracker-v2/
     └── next.config.js
 ```
 
-## 🚀 Production Deployment
+## 🚀 Deployment Options
 
-### Backend
-1. Use PostgreSQL instead of SQLite
-2. Set `DEBUG=False` in .env
-3. Configure CORS for production domain
-4. Use gunicorn: `gunicorn -k uvicorn.workers.UvicornWorker app.main:app`
-5. Set up HTTPS with nginx/Caddy
-6. Use secrets manager for credentials
+### Option 1: Use the Live Hosted Version (Easiest)
 
-### Frontend
-1. Build: `npm run build`
-2. Deploy to Vercel/Netlify or self-host
-3. Update `NEXT_PUBLIC_API_URL` to production backend
-4. Configure custom domain
+No setup required! Just visit https://job-tracker-orpin-pi.vercel.app/ and connect your Outlook account.
+
+> **Note**: You still need to create your own Azure App Registration (see "Email Access Setup" above) to connect your personal Outlook account.
+
+### Option 2: Run Locally
+
+Follow the [Installation](#-installation) section above to run on your machine.
+
+### Option 3: Deploy Your Own Instance
+
+#### Backend (Render)
+1. Fork this repository
+2. Create a new Web Service on [Render](https://render.com)
+3. Connect your GitHub repo, select the `backend` directory
+4. Set environment variables:
+   ```
+   MICROSOFT_CLIENT_ID=your-azure-client-id
+   MICROSOFT_CLIENT_SECRET=your-azure-client-secret
+   MICROSOFT_TENANT_ID=consumers
+   DATABASE_URL=postgresql://... (use Render PostgreSQL)
+   SECRET_KEY=your-secret-key
+   GROQ_API_KEY=your-groq-key
+   ALLOWED_ORIGINS=https://your-frontend.vercel.app
+   DEBUG=False
+   ```
+5. Deploy - backend will be at `https://your-app.onrender.com`
+
+#### Frontend (Vercel)
+1. Import your forked repo to [Vercel](https://vercel.com)
+2. Set root directory to `frontend`
+3. Add environment variable:
+   ```
+   NEXT_PUBLIC_API_URL=https://your-backend.onrender.com
+   ```
+4. Deploy - frontend will be at `https://your-app.vercel.app`
+
+#### Production Tips
+- Use PostgreSQL instead of SQLite for the backend
+- Set `DEBUG=False` in production
+- Configure CORS to only allow your frontend domain
+- Use secrets manager for sensitive credentials
 
 ## 📊 Database Schema
 

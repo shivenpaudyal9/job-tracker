@@ -64,7 +64,7 @@ npm run dev
 2. A device code will appear (e.g., `ABC123XY`)
 3. Click **"Open Microsoft Login"** (opens microsoft.com/devicelogin)
 4. Enter the code
-5. Sign in with: **nkagami19@outlook.com**
+5. Sign in with **your own Outlook/Microsoft account**
 6. Grant permissions
 7. Wait for "Successfully connected!" ✅
 
