@@ -30,7 +30,15 @@ if DATABASE_URL.startswith("sqlite"):
         connect_args={"check_same_thread": False}
     )
 else:
-    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+    # PostgreSQL with connection pool settings for Render
+    engine = create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,  # Check connection before using
+        pool_recycle=300,    # Recycle connections after 5 minutes
+        pool_size=5,         # Max 5 connections in pool
+        max_overflow=10,     # Allow 10 additional connections
+        pool_timeout=30,     # Wait 30s for connection
+    )
 
 # Session
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
