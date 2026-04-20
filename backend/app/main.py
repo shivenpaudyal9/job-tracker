@@ -42,9 +42,19 @@ from app.routers import sync, auth
 from app.routers import jmi as jmi_router
 from app.auth import get_current_user
 
-# Create tables
+# Create core tables (always safe)
 Base.metadata.create_all(bind=engine)
-JMIBase.metadata.create_all(bind=engine)
+
+# Create JMI tables — may fail if pgvector extension is not enabled on Postgres.
+# The existing app keeps working; JMI endpoints return empty data until fixed.
+try:
+    JMIBase.metadata.create_all(bind=engine)
+except Exception as _jmi_err:
+    logging.getLogger(__name__).warning(
+        "JMI tables not created (pgvector extension missing?). "
+        "Run: CREATE EXTENSION IF NOT EXISTS vector; in your database. "
+        "Error: %s", _jmi_err
+    )
 
 # Rate limiting (slowapi)
 try:
