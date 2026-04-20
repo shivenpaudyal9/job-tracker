@@ -78,6 +78,15 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background-secondary to-background relative overflow-hidden">
+      {/* JMI Banner */}
+      <div className="relative z-20 bg-gradient-to-r from-primary-600/20 to-accent-600/20 border-b border-primary-500/20 py-2 px-4 text-center text-sm">
+        <span className="text-foreground-secondary">New: </span>
+        <span className="text-primary-300 font-medium">ML Job Market Intelligence agent is live</span>
+        <span className="text-foreground-secondary"> — </span>
+        <a href="/trends" className="text-primary-400 hover:text-primary-300 underline underline-offset-2 font-medium">
+          View weekly trends →
+        </a>
+      </div>
       {/* Animated Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-72 h-72 bg-primary-600/10 rounded-full blur-3xl animate-float" />

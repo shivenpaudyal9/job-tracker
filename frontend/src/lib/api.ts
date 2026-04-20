@@ -14,6 +14,11 @@ import {
   Stats,
   PaginatedResponse,
   ApiError,
+  JMIStats,
+  JobPosting,
+  TrendingSkillsResponse,
+  WeeklyReportResponse,
+  MatchResponse,
 } from '@/types/api'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -229,6 +234,36 @@ class ApiClient {
     return this.request(`/manual-reviews/${id}/resolve`, {
       method: 'POST',
       body: JSON.stringify(data),
+    })
+  }
+
+  // ── JMI Public APIs ────────────────────────────────────────────────────────
+
+  async getJMIStats(): Promise<JMIStats> {
+    return this.request('/api/stats')
+  }
+
+  async getWeeklyReport(): Promise<WeeklyReportResponse> {
+    return this.request('/api/trends/weekly')
+  }
+
+  async getRecentJobs(params?: { role?: string; limit?: number }): Promise<{ total: number; data: JobPosting[] }> {
+    const q = new URLSearchParams()
+    if (params?.role) q.append('role', params.role)
+    if (params?.limit) q.append('limit', String(params.limit))
+    const qs = q.toString()
+    return this.request(`/api/jobs/recent${qs ? `?${qs}` : ''}`)
+  }
+
+  async getTrendingSkills(window?: number): Promise<TrendingSkillsResponse> {
+    const qs = window ? `?window=${window}` : ''
+    return this.request(`/api/skills/trending${qs}`)
+  }
+
+  async matchResume(resumeText: string): Promise<MatchResponse> {
+    return this.request('/api/match', {
+      method: 'POST',
+      body: JSON.stringify({ resume_text: resumeText }),
     })
   }
 }

@@ -37,18 +37,36 @@ from app.models import (
     Base, Application, ApplicationEvent, ManualReview, Link, User,
     ApplicationStatus, ActionType, SyncState
 )
+from app.jmi_models import JMIBase
 from app.routers import sync, auth
+from app.routers import jmi as jmi_router
 from app.auth import get_current_user
 
 # Create tables
 Base.metadata.create_all(bind=engine)
+JMIBase.metadata.create_all(bind=engine)
+
+# Rate limiting (slowapi)
+try:
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+    from slowapi.util import get_remote_address
+    from slowapi.errors import RateLimitExceeded
+    _limiter = Limiter(key_func=get_remote_address)
+    SLOWAPI_AVAILABLE = True
+except ImportError:
+    _limiter = None
+    SLOWAPI_AVAILABLE = False
 
 # Initialize FastAPI
 app = FastAPI(
     title="Job Tracker API",
-    description="Production job application tracking system with Outlook sync",
-    version="2.0.0"
+    description="Job application tracker + ML Job Market Intelligence agent",
+    version="3.0.0"
 )
+
+if SLOWAPI_AVAILABLE and _limiter:
+    app.state.limiter = _limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS - Allow frontend origins
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
@@ -98,6 +116,7 @@ class ManualReviewResolve(BaseModel):
 # Include routers
 app.include_router(auth.router)
 app.include_router(sync.router)
+app.include_router(jmi_router.router)
 
 
 # Root endpoints

@@ -22,3 +22,8 @@ groq==0.4.2
 # HTML parsing
 beautifulsoup4==4.12.2
 lxml==5.1.0
+# JMI — Job Market Intelligence additions
+sentence-transformers==2.7.0
+pgvector==0.3.2
+slowapi==0.1.9
+cloudscraper==1.2.71

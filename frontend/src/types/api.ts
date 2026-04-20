@@ -176,3 +176,68 @@ export interface RegisterRequest {
   password: string
   name?: string
 }
+
+// ── JMI: Job Market Intelligence ─────────────────────────────────────────────
+
+export interface JMIStats {
+  total_jobs_scraped: number
+  jobs_this_week: number
+  companies_tracked: number
+  last_scrape_at: string | null
+}
+
+export interface JobPosting {
+  id: string
+  source: string
+  company: string
+  title: string
+  location: string | null
+  remote: boolean
+  role_category: string | null
+  seniority: string | null
+  skills_required: string[]
+  salary_min: number | null
+  salary_max: number | null
+  visa_sponsorship: boolean | null
+  source_url: string
+  match_score: number | null
+  scraped_at: string | null
+}
+
+export interface SkillTrend {
+  skill: string
+  mentions: number
+  pct_change: number
+}
+
+export interface TrendingSkillsResponse {
+  window_days: number
+  skills: SkillTrend[]
+}
+
+export interface WeeklyReportData {
+  week_start: string
+  total_jobs: number
+  by_role_category: Record<string, number>
+  top_companies: { company: string; count: number }[]
+  top_skills: { skill: string; count: number }[]
+  skills_rising: { skill: string; pct_change: number }[]
+  skills_falling: { skill: string; pct_change: number }[]
+  salary_by_seniority: Record<string, { avg: number; count: number }>
+  remote_count: number
+  onsite_count: number
+  visa_companies: string[]
+  narrative?: string
+}
+
+export interface WeeklyReportResponse {
+  week_start: string
+  generated_at: string | null
+  total_jobs: number
+  report: WeeklyReportData
+}
+
+export interface MatchResponse {
+  matches: JobPosting[]
+  note: string
+}
