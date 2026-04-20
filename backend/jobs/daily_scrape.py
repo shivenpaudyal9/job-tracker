@@ -36,8 +36,7 @@ JMIBase.metadata.create_all(bind=engine)
 
 from scrapers.runner import run_all
 from llm.extractor import extract
-from embeddings.generator import embed, PGVECTOR_AVAILABLE as _embed_check
-from embeddings import generator as gen_module
+from embeddings.generator import embed
 
 
 def _current_week_start() -> date:
