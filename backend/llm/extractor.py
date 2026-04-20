@@ -75,7 +75,7 @@ def extract(title: str, company: str, description: str, max_retries: int = 3) ->
     for attempt in range(1, max_retries + 1):
         try:
             response = client.chat.completions.create(
-                model="llama-3.1-70b-versatile",
+                model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0,
                 max_tokens=512,
