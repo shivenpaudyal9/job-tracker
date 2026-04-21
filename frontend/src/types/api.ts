@@ -196,12 +196,16 @@ export interface JobPosting {
   role_category: string | null
   seniority: string | null
   skills_required: string[]
+  skills_nice_to_have: string[]
   salary_min: number | null
   salary_max: number | null
+  salary_currency: string | null
   visa_sponsorship: boolean | null
   source_url: string
   match_score: number | null
+  is_demo: boolean
   scraped_at: string | null
+  posted_at: string | null
 }
 
 export interface SkillTrend {
@@ -240,4 +244,25 @@ export interface WeeklyReportResponse {
 export interface MatchResponse {
   matches: JobPosting[]
   note: string
+}
+
+export interface JobsListResponse {
+  jobs: JobPosting[]
+  total: number
+  page: number
+  limit: number
+  has_more: boolean
+  data_source: 'live' | 'hybrid' | 'demo'
+  label: string
+}
+
+export interface JobsListParams {
+  search?: string
+  role_category?: string
+  seniority?: string
+  remote_only?: boolean
+  visa_only?: boolean
+  sort?: 'newest' | 'salary_desc' | 'match'
+  page?: number
+  limit?: number
 }

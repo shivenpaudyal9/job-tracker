@@ -19,6 +19,8 @@ import {
   TrendingSkillsResponse,
   WeeklyReportResponse,
   MatchResponse,
+  JobsListResponse,
+  JobsListParams,
 } from '@/types/api'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -265,6 +267,20 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ resume_text: resumeText }),
     })
+  }
+
+  async listJobs(params: JobsListParams = {}): Promise<JobsListResponse> {
+    const q = new URLSearchParams()
+    if (params.search) q.append('search', params.search)
+    if (params.role_category) q.append('role_category', params.role_category)
+    if (params.seniority) q.append('seniority', params.seniority)
+    if (params.remote_only) q.append('remote_only', 'true')
+    if (params.visa_only) q.append('visa_only', 'true')
+    if (params.sort) q.append('sort', params.sort)
+    if (params.page) q.append('page', String(params.page))
+    if (params.limit) q.append('limit', String(params.limit))
+    const qs = q.toString()
+    return this.request(`/api/jobs/list${qs ? `?${qs}` : ''}`)
   }
 }
 

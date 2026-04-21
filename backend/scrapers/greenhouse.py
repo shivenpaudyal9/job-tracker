@@ -14,6 +14,10 @@ COMPANIES = [
     "stripe", "airbnb", "dropbox", "pinterest", "roblox", "discord",
     "figma", "notion", "openai", "anthropic", "scale", "huggingface",
     "databricks", "snowflake", "coinbase", "instacart", "doordash",
+    "affirm", "asana", "benchling", "betterup", "block", "carta",
+    "cloudflare", "datadog", "duolingo", "github", "gusto",
+    "mongodb", "okta", "opendoor", "palantir", "rippling",
+    "samsara", "twilio", "zoom", "atlassian",
 ]
 
 ML_KEYWORDS = {

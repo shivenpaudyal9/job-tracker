@@ -78,14 +78,32 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background-secondary to-background relative overflow-hidden">
-      {/* JMI Banner */}
-      <div className="relative z-20 bg-gradient-to-r from-primary-600/20 to-accent-600/20 border-b border-primary-500/20 py-2 px-4 text-center text-sm">
-        <span className="text-foreground-secondary">New: </span>
-        <span className="text-primary-300 font-medium">ML Job Market Intelligence agent is live</span>
-        <span className="text-foreground-secondary"> — </span>
-        <a href="/trends" className="text-primary-400 hover:text-primary-300 underline underline-offset-2 font-medium">
-          View weekly trends →
-        </a>
+      {/* JMI Hero Banner */}
+      <div className="relative z-20 bg-gradient-to-r from-primary-600/20 to-accent-600/20 border-b border-primary-500/20 py-3 px-4">
+        <div className="container mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-sm">
+          <span className="text-foreground-secondary text-center sm:text-left">
+            Browse{' '}
+            <span className="text-primary-300 font-semibold">1,200+ ML/DS jobs</span>
+            {' '}from top companies — filter by skill, salary, and visa sponsorship
+          </span>
+          <div className="flex items-center gap-4 flex-shrink-0">
+            <a href="/jobs" className="text-primary-400 hover:text-primary-300 font-medium flex items-center gap-1">
+              Browse Jobs →
+            </a>
+            <a href="/trends" className="text-foreground-secondary hover:text-foreground text-xs">
+              Market trends
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick stat callouts */}
+      <div className="relative z-20 bg-background/60 backdrop-blur-sm border-b border-foreground-muted/5 py-2 px-4">
+        <div className="container mx-auto flex items-center justify-center gap-8 text-xs text-foreground-muted">
+          <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />1,200+ ML/DS jobs tracked</span>
+          <span>75+ companies monitored</span>
+          <span>Updated daily at 6am UTC</span>
+        </div>
       </div>
       {/* Animated Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">

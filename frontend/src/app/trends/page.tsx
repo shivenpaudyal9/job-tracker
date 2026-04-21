@@ -39,6 +39,8 @@ export default function TrendsPage() {
   })
 
   const report = reportData?.report
+  const dataSource = (reportData as any)?.data_source
+  const dataLabel = (reportData as any)?.label
   const isLoading = statsLoading || reportLoading || skillsLoading
 
   const roleChartData = report
@@ -73,12 +75,20 @@ export default function TrendsPage() {
               </p>
             </div>
           </div>
-          {statsData?.last_scrape_at && (
-            <div className="flex items-center gap-2 text-foreground-muted text-xs mt-2">
-              <RefreshCw className="w-3 h-3" />
-              Last scraped {new Date(statsData.last_scrape_at).toLocaleString()}
-            </div>
-          )}
+          <div className="flex items-center gap-3 mt-2 flex-wrap">
+            {statsData?.last_scrape_at && (
+              <div className="flex items-center gap-1.5 text-foreground-muted text-xs">
+                <RefreshCw className="w-3 h-3" />
+                Last scraped {new Date(statsData.last_scrape_at).toLocaleString()}
+              </div>
+            )}
+            {dataLabel && (
+              <div className="flex items-center gap-1.5 text-xs text-foreground-muted px-2.5 py-1 rounded-full bg-foreground-muted/5 border border-foreground-muted/10">
+                <span className={`w-1.5 h-1.5 rounded-full ${dataSource === 'live' ? 'bg-green-400' : dataSource === 'hybrid' ? 'bg-yellow-400' : 'bg-blue-400'} animate-pulse`} />
+                {dataLabel}
+              </div>
+            )}
+          </div>
         </motion.div>
 
         {/* Stat cards */}

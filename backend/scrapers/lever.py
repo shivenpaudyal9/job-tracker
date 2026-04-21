@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 COMPANIES = [
     "netflix", "mixpanel", "brex", "robinhood", "plaid", "ramp",
     "gitlab", "posthog", "vercel", "replit", "scale-ai", "weights-biases",
+    "airtable", "automattic", "circleci", "elastic", "everlaw",
+    "harness", "mux", "nylas", "replicate", "vimeo",
 ]
 
 ML_KEYWORDS = {
