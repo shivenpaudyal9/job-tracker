@@ -42,8 +42,11 @@ from app.routers import sync, auth
 from app.routers import jmi as jmi_router
 from app.auth import get_current_user
 
-# Create core tables (always safe)
-Base.metadata.create_all(bind=engine)
+# Create core tables
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as _db_err:
+    logging.getLogger(__name__).error("DB table creation failed: %s", _db_err)
 
 # Create JMI tables — may fail if pgvector extension is not enabled on Postgres.
 # The existing app keeps working; JMI endpoints return empty data until fixed.
