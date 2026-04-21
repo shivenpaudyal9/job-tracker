@@ -69,6 +69,15 @@ export default function RegisterPage() {
           <p className="text-slate-400">Start tracking your job applications</p>
         </div>
 
+        {/* Microsoft notice */}
+        <div className="flex items-start gap-2 mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-sm text-blue-300">
+          <span className="mt-0.5 flex-shrink-0">ℹ️</span>
+          <span>
+            Email sync requires a <strong>Microsoft account</strong> (Outlook, Hotmail, or work/school).
+            Gmail users can <a href="https://support.microsoft.com/en-us/office/import-gmail-to-outlook-com-c2d61f59-a8e4-4a89-80c9-3ed82c3ceb09" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-200">forward emails to Outlook</a> to use this feature.
+          </span>
+        </div>
+
         {/* Form Card */}
         <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-8 border border-slate-700/50 shadow-xl">
           <form onSubmit={handleSubmit} className="space-y-5">
