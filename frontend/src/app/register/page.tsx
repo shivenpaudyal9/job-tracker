@@ -99,6 +99,7 @@ export default function RegisterPage() {
                 <input
                   id="name"
                   type="text"
+                  name="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Your name"
@@ -117,6 +118,7 @@ export default function RegisterPage() {
                 <input
                   id="email"
                   type="email"
+                  name="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
@@ -136,6 +138,7 @@ export default function RegisterPage() {
                 <input
                   id="password"
                   type="password"
+                  name="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="At least 8 characters"
@@ -160,6 +163,7 @@ export default function RegisterPage() {
                 <input
                   id="confirmPassword"
                   type="password"
+                  name="confirmPassword"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirm your password"
