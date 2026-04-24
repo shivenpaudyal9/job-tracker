@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Search, Filter, X, Briefcase, Wifi, Globe, TrendingUp } from 'lucide-react'
+import { Search, X, Briefcase, ChevronDown, TrendingUp, Check } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { JobCard, JobCardSkeleton } from '@/components/JobCard'
@@ -11,37 +11,104 @@ import { api } from '@/lib/api'
 import { JobsListParams } from '@/types/api'
 import Link from 'next/link'
 
+// ── Filter options ────────────────────────────────────────────────────────────
+
 const ROLE_OPTIONS = [
   { value: '', label: 'All Roles' },
   { value: 'ml_engineer', label: 'ML Engineer' },
   { value: 'data_scientist', label: 'Data Scientist' },
-  { value: 'mlops', label: 'MLOps' },
+  { value: 'mlops', label: 'MLOps Engineer' },
   { value: 'applied_scientist', label: 'Applied Scientist' },
-  { value: 'analytics', label: 'Analytics' },
-  { value: 'research', label: 'Research' },
+  { value: 'analytics', label: 'Analytics Engineer' },
+  { value: 'research', label: 'Research Scientist' },
 ]
 
-const SENIORITY_OPTIONS = [
+const LEVEL_OPTIONS = [
   { value: '', label: 'All Levels' },
-  { value: 'intern', label: 'Intern' },
-  { value: 'junior', label: 'Junior' },
-  { value: 'mid', label: 'Mid' },
-  { value: 'senior', label: 'Senior' },
-  { value: 'staff', label: 'Staff' },
-  { value: 'principal', label: 'Principal' },
+  { value: 'entry', label: 'Entry Level' },
+  { value: 'mid', label: 'Mid Level' },
+  { value: 'senior', label: 'Senior Level' },
 ]
 
 const SORT_OPTIONS = [
-  { value: 'newest', label: 'Newest' },
+  { value: 'newest', label: 'Newest First' },
   { value: 'salary_desc', label: 'Salary: High to Low' },
 ]
 
+const WORK_TYPE_OPTIONS = [
+  { value: '', label: 'All Locations' },
+  { value: 'remote', label: 'Remote' },
+  { value: 'hybrid', label: 'Hybrid' },
+  { value: 'onsite', label: 'Onsite' },
+]
+
+// Map simplified level → seniority values sent to backend
+const LEVEL_TO_SENIORITY: Record<string, string[]> = {
+  entry: ['intern', 'junior'],
+  mid: ['mid'],
+  senior: ['senior', 'staff', 'principal'],
+}
+
+// ── Custom dropdown ───────────────────────────────────────────────────────────
+
+interface SelectOption { value: string; label: string }
+
+function FilterSelect({
+  value,
+  onChange,
+  options,
+}: {
+  value: string
+  onChange: (v: string) => void
+  options: SelectOption[]
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const selected = options.find(o => o.value === value) ?? options[0]
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-background border border-foreground-muted/20 text-sm text-foreground hover:border-primary-500/40 transition-colors whitespace-nowrap min-w-[130px]"
+      >
+        <span className="flex-1 text-left">{selected.label}</span>
+        <ChevronDown className={`w-3.5 h-3.5 text-foreground-muted transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 top-full left-0 mt-1 min-w-full bg-background-secondary border border-foreground-muted/20 rounded-lg shadow-xl overflow-hidden">
+          {options.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => { onChange(opt.value); setOpen(false) }}
+              className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm text-left hover:bg-foreground-muted/10 transition-colors
+                ${opt.value === value ? 'text-primary-300 bg-primary-500/5' : 'text-foreground'}`}
+            >
+              <span className="flex-1">{opt.label}</span>
+              {opt.value === value && <Check className="w-3.5 h-3.5 text-primary-400 flex-shrink-0" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Data source badge ─────────────────────────────────────────────────────────
+
 function DataSourceBadge({ source, label }: { source: string; label: string }) {
-  const dot = source === 'live'
-    ? 'bg-green-400'
-    : source === 'hybrid'
-    ? 'bg-yellow-400'
-    : 'bg-blue-400'
+  const dot = source === 'live' ? 'bg-green-400' : source === 'hybrid' ? 'bg-yellow-400' : 'bg-blue-400'
   return (
     <div className="flex items-center gap-1.5 text-xs text-foreground-muted px-3 py-1.5 rounded-full bg-foreground-muted/5 border border-foreground-muted/10">
       <span className={`w-1.5 h-1.5 rounded-full ${dot} animate-pulse`} />
@@ -50,24 +117,61 @@ function DataSourceBadge({ source, label }: { source: string; label: string }) {
   )
 }
 
+// ── Main page ─────────────────────────────────────────────────────────────────
+
 export default function JobsPageClient() {
-  const [params, setParams] = useState<JobsListParams>({ page: 1, limit: 20, sort: 'newest' })
   const [search, setSearch] = useState('')
+  const [role, setRole] = useState('')
+  const [level, setLevel] = useState('')
+  const [sort, setSort] = useState('newest')
+  const [workType, setWorkType] = useState('')
+  const [visaOnly, setVisaOnly] = useState(false)
+  const [page, setPage] = useState(1)
   const [allJobs, setAllJobs] = useState<any[]>([])
-  const [loadedPages, setLoadedPages] = useState(1)
   const [hasMore, setHasMore] = useState(true)
   const [dataSource, setDataSource] = useState<{ source: string; label: string } | null>(null)
 
-  const queryParams = { ...params, search: search || undefined }
+  // Map level to backend seniority param (just use first value for single-seniority filter)
+  const seniorityParam = level ? LEVEL_TO_SENIORITY[level]?.[0] : undefined
 
-  const { data, isLoading, isFetching } = useQuery({
+  // For entry level, we'll send 'junior' but also filter client-side
+  const queryParams: JobsListParams = {
+    search: search || undefined,
+    role_category: role || undefined,
+    seniority: seniorityParam,
+    remote_only: workType === 'remote' ? true : undefined,
+    visa_only: visaOnly || undefined,
+    sort: sort as any,
+    page,
+    limit: 20,
+  }
+
+  const { isLoading, isFetching } = useQuery({
     queryKey: ['jobs-list', queryParams],
     queryFn: async () => {
       const res = await api.listJobs(queryParams)
-      if (queryParams.page === 1) {
-        setAllJobs(res.jobs)
+      let jobs = res.jobs
+
+      // Client-side work type filtering
+      if (workType === 'remote') {
+        jobs = jobs.filter(j => j.remote && !j.location?.toLowerCase().includes('hybrid'))
+      } else if (workType === 'hybrid') {
+        jobs = jobs.filter(j => j.location?.toLowerCase().includes('hybrid'))
+      } else if (workType === 'onsite') {
+        jobs = jobs.filter(j => !j.remote && !j.location?.toLowerCase().includes('hybrid'))
+      }
+
+      // Client-side entry level filter (also include intern)
+      if (level === 'entry') {
+        jobs = jobs.filter(j => ['intern', 'junior'].includes(j.seniority ?? ''))
+      } else if (level === 'senior') {
+        jobs = jobs.filter(j => ['senior', 'staff', 'principal'].includes(j.seniority ?? ''))
+      }
+
+      if (page === 1) {
+        setAllJobs(jobs)
       } else {
-        setAllJobs(prev => [...prev, ...res.jobs])
+        setAllJobs(prev => [...prev, ...jobs])
       }
       setHasMore(res.has_more)
       setDataSource({ source: res.data_source, label: res.label })
@@ -76,31 +180,24 @@ export default function JobsPageClient() {
     placeholderData: (prev: any) => prev,
   })
 
-  const applyFilters = useCallback((newParams: Partial<JobsListParams>) => {
-    setAllJobs([])
-    setLoadedPages(1)
-    setParams(p => ({ ...p, ...newParams, page: 1 }))
+  const resetFilters = useCallback(() => {
+    setSearch(''); setRole(''); setLevel(''); setSort('newest')
+    setWorkType(''); setVisaOnly(false); setPage(1); setAllJobs([])
   }, [])
 
-  const resetFilters = () => {
-    setSearch('')
+  const applyFilter = useCallback((updater: () => void) => {
+    updater()
+    setPage(1)
     setAllJobs([])
-    setLoadedPages(1)
-    setParams({ page: 1, limit: 20, sort: 'newest' })
-  }
+  }, [])
 
-  const loadMore = () => {
-    const next = loadedPages + 1
-    setLoadedPages(next)
-    setParams(p => ({ ...p, page: next }))
-  }
-
-  const totalDisplay = (data as any)?.total ? (data as any).total.toLocaleString() : '...'
-  const hasFilters = !!(search || params.role_category || params.seniority || params.remote_only || params.visa_only)
+  const hasFilters = !!(search || role || level || workType || visaOnly)
+  const totalDisplay = allJobs.length > 0
+    ? `${allJobs.length}+ roles`
+    : isLoading ? 'Loading...' : '0 roles'
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background-secondary to-background">
-      {/* bg blobs */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-72 h-72 bg-primary-600/8 rounded-full blur-3xl" />
         <div className="absolute bottom-20 right-10 w-96 h-96 bg-accent-600/8 rounded-full blur-3xl" />
@@ -115,11 +212,9 @@ export default function JobsPageClient() {
                 <Briefcase className="w-5 h-5 text-primary-400" />
                 <h1 className="text-2xl font-bold">ML/DS Job Board</h1>
               </div>
-              <p className="text-foreground-secondary text-sm">
-                {totalDisplay} roles from 75+ top companies
-              </p>
+              <p className="text-foreground-secondary text-sm">{totalDisplay} from 75+ top companies</p>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap">
               {dataSource && <DataSourceBadge {...dataSource} />}
               <Link href="/trends" className="text-xs text-primary-400 hover:underline flex items-center gap-1">
                 <TrendingUp className="w-3 h-3" />Market trends
@@ -139,69 +234,53 @@ export default function JobsPageClient() {
                   type="text"
                   placeholder="Search by company, role, or skill..."
                   value={search}
-                  onChange={e => {
-                    setSearch(e.target.value)
-                    applyFilters({})
-                  }}
-                  className="w-full pl-9 pr-4 py-2.5 bg-background border border-foreground-muted/20 rounded-lg text-sm focus:outline-none focus:border-primary-500/50 text-foreground placeholder:text-foreground-muted"
+                  onChange={e => applyFilter(() => setSearch(e.target.value))}
+                  className="w-full pl-9 pr-9 py-2.5 bg-background border border-foreground-muted/20 rounded-lg text-sm focus:outline-none focus:border-primary-500/50 text-foreground placeholder:text-foreground-muted"
                 />
                 {search && (
-                  <button onClick={() => { setSearch(''); applyFilters({}) }} className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <button onClick={() => applyFilter(() => setSearch(''))} className="absolute right-3 top-1/2 -translate-y-1/2">
                     <X className="w-4 h-4 text-foreground-muted hover:text-foreground" />
                   </button>
                 )}
               </div>
 
-              {/* Filter row */}
-              <div className="flex flex-wrap gap-2">
-                <select
-                  value={params.role_category || ''}
-                  onChange={e => applyFilters({ role_category: e.target.value || undefined })}
-                  className="px-3 py-2 bg-background border border-foreground-muted/20 rounded-lg text-sm text-foreground focus:outline-none focus:border-primary-500/50 cursor-pointer"
-                >
-                  {ROLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
+              {/* Filter dropdowns */}
+              <div className="flex flex-wrap gap-2 items-center">
+                <FilterSelect
+                  value={role}
+                  onChange={v => applyFilter(() => setRole(v))}
+                  options={ROLE_OPTIONS}
+                />
+                <FilterSelect
+                  value={level}
+                  onChange={v => applyFilter(() => setLevel(v))}
+                  options={LEVEL_OPTIONS}
+                />
+                <FilterSelect
+                  value={workType}
+                  onChange={v => applyFilter(() => setWorkType(v))}
+                  options={WORK_TYPE_OPTIONS}
+                />
+                <FilterSelect
+                  value={sort}
+                  onChange={v => applyFilter(() => setSort(v))}
+                  options={SORT_OPTIONS}
+                />
 
-                <select
-                  value={params.seniority || ''}
-                  onChange={e => applyFilters({ seniority: e.target.value || undefined })}
-                  className="px-3 py-2 bg-background border border-foreground-muted/20 rounded-lg text-sm text-foreground focus:outline-none focus:border-primary-500/50 cursor-pointer"
-                >
-                  {SENIORITY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-
-                <select
-                  value={params.sort || 'newest'}
-                  onChange={e => applyFilters({ sort: e.target.value as any })}
-                  className="px-3 py-2 bg-background border border-foreground-muted/20 rounded-lg text-sm text-foreground focus:outline-none focus:border-primary-500/50 cursor-pointer"
-                >
-                  {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-
+                {/* Visa toggle */}
                 <button
-                  onClick={() => applyFilters({ remote_only: !params.remote_only })}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm transition-colors ${
-                    params.remote_only
-                      ? 'bg-teal-500/20 border-teal-500/40 text-teal-300'
-                      : 'bg-background border-foreground-muted/20 text-foreground-secondary hover:border-foreground-muted/40'
-                  }`}
-                >
-                  <Wifi className="w-3.5 h-3.5" />Remote
-                </button>
-
-                <button
-                  onClick={() => applyFilters({ visa_only: !params.visa_only })}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm transition-colors ${
-                    params.visa_only
+                  onClick={() => applyFilter(() => setVisaOnly(v => !v))}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm transition-colors whitespace-nowrap ${
+                    visaOnly
                       ? 'bg-green-500/20 border-green-500/40 text-green-300'
                       : 'bg-background border-foreground-muted/20 text-foreground-secondary hover:border-foreground-muted/40'
                   }`}
                 >
-                  <Globe className="w-3.5 h-3.5" />Visa Sponsorship
+                  Visa Sponsorship
                 </button>
 
                 {hasFilters && (
-                  <button onClick={resetFilters} className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm text-foreground-muted hover:text-foreground transition-colors">
+                  <button onClick={resetFilters} className="flex items-center gap-1 px-2 py-2 text-sm text-foreground-muted hover:text-foreground transition-colors">
                     <X className="w-3.5 h-3.5" />Reset
                   </button>
                 )}
@@ -212,15 +291,13 @@ export default function JobsPageClient() {
 
         {/* Job list */}
         <div className="space-y-3">
-          {isLoading && params.page === 1 ? (
+          {isLoading && page === 1 ? (
             Array.from({ length: 8 }).map((_, i) => <JobCardSkeleton key={i} />)
           ) : allJobs.length === 0 ? (
             <div className="text-center py-16">
               <Briefcase className="w-10 h-10 text-foreground-muted mx-auto mb-3" />
               <p className="text-foreground-secondary">No jobs match your filters.</p>
-              <button onClick={resetFilters} className="mt-3 text-primary-400 text-sm hover:underline">
-                Reset filters
-              </button>
+              <button onClick={resetFilters} className="mt-3 text-primary-400 text-sm hover:underline">Reset filters</button>
             </div>
           ) : (
             <>
@@ -237,19 +314,15 @@ export default function JobsPageClient() {
 
               {hasMore && (
                 <div className="flex justify-center pt-4">
-                  <Button
-                    onClick={loadMore}
-                    variant="outline"
-                    disabled={isFetching}
-                  >
+                  <Button onClick={() => setPage(p => p + 1)} variant="outline" disabled={isFetching}>
                     {isFetching ? 'Loading...' : 'Load More Jobs'}
                   </Button>
                 </div>
               )}
 
-              {isFetching && params.page && params.page > 1 && (
+              {isFetching && page > 1 &&
                 Array.from({ length: 3 }).map((_, i) => <JobCardSkeleton key={`sk-${i}`} />)
-              )}
+              }
             </>
           )}
         </div>
@@ -261,7 +334,7 @@ export default function JobsPageClient() {
             <a href="https://portfolioneo-two.vercel.app" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:underline">
               Shiven Paudyal
             </a>
-            {' '}· MS CS at CSULB · Powered by FastAPI, Next.js, and Groq LLM
+            {' '}&middot; MS CS at CSULB &middot; Powered by FastAPI, Next.js, and Groq LLM
           </p>
         </footer>
       </div>
