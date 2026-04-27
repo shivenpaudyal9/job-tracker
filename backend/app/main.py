@@ -82,7 +82,10 @@ if SLOWAPI_AVAILABLE and _limiter:
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS - Allow frontend origins
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+ALLOWED_ORIGINS = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000,https://job-tracker-orpin-pi.vercel.app"
+).split(",")
 
 app.add_middleware(
     CORSMiddleware,
