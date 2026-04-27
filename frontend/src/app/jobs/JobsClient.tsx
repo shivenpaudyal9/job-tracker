@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Search, X, Briefcase, ChevronDown, TrendingUp, Check } from 'lucide-react'
+import { Search, X, Briefcase, ChevronDown, TrendingUp } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { JobCard, JobCardSkeleton } from '@/components/JobCard'
@@ -62,45 +62,21 @@ function FilterSelect({
   onChange: (v: string) => void
   options: SelectOption[]
 }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  const selected = options.find(o => o.value === value) ?? options[0]
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
-
   return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-background border border-foreground-muted/20 text-sm text-foreground hover:border-primary-500/40 transition-colors whitespace-nowrap min-w-[130px]"
+    <div className="relative">
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="appearance-none pl-3 pr-8 py-2 rounded-lg border border-foreground-muted/20 text-sm hover:border-primary-500/40 focus:outline-none focus:border-primary-500/50 transition-colors whitespace-nowrap min-w-[130px] cursor-pointer"
+        style={{ backgroundColor: '#1e293b', color: '#f8fafc' }}
       >
-        <span className="flex-1 text-left">{selected.label}</span>
-        <ChevronDown className={`w-3.5 h-3.5 text-foreground-muted transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-
-      {open && (
-        <div className="absolute z-50 top-full left-0 mt-1 min-w-full bg-background-secondary border border-foreground-muted/20 rounded-lg shadow-xl overflow-hidden">
-          {options.map(opt => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => { onChange(opt.value); setOpen(false) }}
-              className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm text-left hover:bg-foreground-muted/10 transition-colors
-                ${opt.value === value ? 'text-primary-300 bg-primary-500/5' : 'text-foreground'}`}
-            >
-              <span className="flex-1">{opt.label}</span>
-              {opt.value === value && <Check className="w-3.5 h-3.5 text-primary-400 flex-shrink-0" />}
-            </button>
-          ))}
-        </div>
-      )}
+        {options.map(opt => (
+          <option key={opt.value} value={opt.value} style={{ backgroundColor: '#1e293b', color: '#f8fafc' }}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground-muted pointer-events-none" />
     </div>
   )
 }
