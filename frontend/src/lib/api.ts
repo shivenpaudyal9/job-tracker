@@ -269,6 +269,18 @@ class ApiClient {
     })
   }
 
+  async extractResume(file: File): Promise<{ text: string }> {
+    const form = new FormData()
+    form.append('file', file)
+    const url = `${this.baseUrl}/api/extract-resume`
+    const response = await fetch(url, { method: 'POST', body: form })
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ detail: 'Extraction failed' }))
+      throw new Error(err.detail)
+    }
+    return response.json()
+  }
+
   async listJobs(params: JobsListParams = {}): Promise<JobsListResponse> {
     const q = new URLSearchParams()
     if (params.search) q.append('search', params.search)

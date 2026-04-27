@@ -27,3 +27,6 @@ sentence-transformers==2.7.0
 pgvector==0.3.2
 slowapi==0.1.9
 cloudscraper==1.2.71
+# Resume text extraction
+pypdf==5.1.0
+python-docx==1.1.2

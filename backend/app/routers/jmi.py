@@ -10,7 +10,8 @@ import os
 from datetime import datetime, timedelta, date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, Request
+import io
+from fastapi import APIRouter, Depends, Query, Request, UploadFile, File, HTTPException
 from sqlalchemy import func, desc, or_, cast, String
 from sqlalchemy.orm import Session
 
@@ -383,6 +384,37 @@ def match_resume(request: Request, body: dict, db: Session = Depends(get_db)):
         "matches": top20,
         "note": "Your resume is embedded locally and not stored in full.",
     }
+
+
+# ── /api/extract-resume ───────────────────────────────────────────────────────
+
+@router.post("/extract-resume")
+async def extract_resume(file: UploadFile = File(...)):
+    filename = (file.filename or "").lower()
+    content = await file.read()
+
+    if filename.endswith(".txt") or file.content_type == "text/plain":
+        return {"text": content.decode("utf-8", errors="replace")}
+
+    if filename.endswith(".pdf") or file.content_type == "application/pdf":
+        try:
+            import pypdf
+            reader = pypdf.PdfReader(io.BytesIO(content))
+            text = "\n".join(page.extract_text() or "" for page in reader.pages)
+            return {"text": text}
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"PDF extraction failed: {e}")
+
+    if filename.endswith(".docx"):
+        try:
+            import docx
+            doc = docx.Document(io.BytesIO(content))
+            text = "\n".join(p.text for p in doc.paragraphs)
+            return {"text": text}
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"DOCX extraction failed: {e}")
+
+    raise HTTPException(status_code=400, detail="Unsupported file type. Upload a PDF, DOCX, or TXT file.")
 
 
 # ── /api/stats (public meta) ─────────────────────────────────────────────────

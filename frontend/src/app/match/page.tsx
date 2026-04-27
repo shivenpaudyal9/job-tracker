@@ -108,25 +108,9 @@ async function extractTextFromFile(file: File): Promise<string> {
       reader.readAsText(file)
     })
   }
-  if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-    const pdfjsLib = await import('pdfjs-dist')
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
-    const arrayBuffer = await file.arrayBuffer()
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
-    const pages = await Promise.all(
-      Array.from({ length: pdf.numPages }, (_, i) =>
-        pdf.getPage(i + 1).then(p => p.getTextContent()).then(c => c.items.map((it: any) => it.str).join(' '))
-      )
-    )
-    return pages.join('\n')
-  }
-  if (file.name.endsWith('.docx')) {
-    const mammoth = await import('mammoth')
-    const arrayBuffer = await file.arrayBuffer()
-    const result = await mammoth.extractRawText({ arrayBuffer })
-    return result.value
-  }
-  throw new Error('Unsupported file type. Please upload a PDF, DOCX, or TXT file.')
+  const { api } = await import('@/lib/api')
+  const result = await api.extractResume(file)
+  return result.text
 }
 
 export default function MatchPage() {
