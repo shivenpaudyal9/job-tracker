@@ -122,7 +122,7 @@ export default function JobsPageClient() {
     limit: 20,
   }
 
-  const { isLoading, isFetching } = useQuery({
+  const { isLoading, isFetching, isError } = useQuery({
     queryKey: ['jobs-list', queryParams],
     queryFn: async () => {
       const res = await api.listJobs(queryParams)
@@ -269,6 +269,13 @@ export default function JobsPageClient() {
         <div className="space-y-3">
           {isLoading && page === 1 ? (
             Array.from({ length: 8 }).map((_, i) => <JobCardSkeleton key={i} />)
+          ) : isError ? (
+            <div className="text-center py-16">
+              <Briefcase className="w-10 h-10 text-foreground-muted mx-auto mb-3" />
+              <p className="text-foreground-secondary font-medium">Backend is starting up</p>
+              <p className="text-foreground-muted text-sm mt-1">The server wakes on first request — wait ~30s and try again.</p>
+              <button onClick={() => { setAllJobs([]); setPage(1) }} className="mt-4 text-primary-400 text-sm hover:underline">Retry</button>
+            </div>
           ) : allJobs.length === 0 ? (
             <div className="text-center py-16">
               <Briefcase className="w-10 h-10 text-foreground-muted mx-auto mb-3" />
