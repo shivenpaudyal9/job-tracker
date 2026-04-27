@@ -266,10 +266,11 @@ class ApiClient {
     return this.request(`/api/skills/trending${qs}`)
   }
 
-  async matchResume(resumeText: string): Promise<MatchResponse> {
+  async matchResume(resumeText: string, signal?: AbortSignal): Promise<MatchResponse> {
     return this.request('/api/match', {
       method: 'POST',
       body: JSON.stringify({ resume_text: resumeText }),
+      signal,
     })
   }
 

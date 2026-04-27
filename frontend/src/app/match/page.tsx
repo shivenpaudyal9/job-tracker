@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Brain, Search, ExternalLink, MapPin, DollarSign, Briefcase, Shield, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
@@ -120,7 +120,15 @@ export default function MatchPage() {
   const [matches, setMatches] = useState<JobPosting[] | null>(null)
   const [note, setNote] = useState('')
   const [backendError, setBackendError] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    if (!isLoading) { setElapsed(0); return }
+    const t = setInterval(() => setElapsed(s => s + 1), 1000)
+    return () => clearInterval(t)
+  }, [isLoading])
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -143,11 +151,13 @@ export default function MatchPage() {
       toast.error('Please paste at least 50 characters of your resume')
       return
     }
+    abortRef.current = new AbortController()
+    const timeout = setTimeout(() => abortRef.current?.abort(), 120_000)
     setIsLoading(true)
     setMatches(null)
     setBackendError(false)
     try {
-      const result = await api.matchResume(resumeText)
+      const result = await api.matchResume(resumeText, abortRef.current.signal)
       setMatches(result.matches)
       setNote(result.note ?? '')
       if (result.matches.length === 0) {
@@ -155,8 +165,12 @@ export default function MatchPage() {
       }
     } catch (e: any) {
       setBackendError(true)
-      toast.error('Backend is starting up — wait ~30s and try again')
+      const msg = e.name === 'AbortError'
+        ? 'Timed out after 2 min — the model is loading on first run. Try again in 30s.'
+        : 'Backend is starting up — wait ~30s and try again'
+      toast.error(msg)
     } finally {
+      clearTimeout(timeout)
       setIsLoading(false)
     }
   }
@@ -255,7 +269,13 @@ export default function MatchPage() {
         {isLoading && (
           <div className="text-center py-16">
             <div className="w-12 h-12 rounded-full border-2 border-primary-500/30 border-t-primary-500 animate-spin mx-auto mb-4" />
-            <p className="text-foreground-secondary">Generating embeddings and searching {'>'}10k jobs…</p>
+            <p className="text-foreground-secondary">Generating embeddings and searching &gt;10k jobs…</p>
+            <p className="text-foreground-muted text-sm mt-2">{elapsed}s elapsed</p>
+            {elapsed >= 10 && (
+              <p className="text-yellow-400/80 text-xs mt-2">
+                First run loads the AI model — usually takes 30–90s. Hang tight.
+              </p>
+            )}
           </div>
         )}
       </div>
