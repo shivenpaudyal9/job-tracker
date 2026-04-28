@@ -23,10 +23,10 @@ import {
   JobsListParams,
 } from '@/types/api'
 
-// In the browser, route through Next.js /proxy rewrite so CORS is never an issue.
+// In the browser, route through the Next.js API proxy so CORS is never an issue.
 // On the server (SSR), call the backend directly.
 const API_BASE_URL = typeof window !== 'undefined'
-  ? '/proxy'
+  ? '/api/proxy'
   : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')
 
 class ApiClient {
