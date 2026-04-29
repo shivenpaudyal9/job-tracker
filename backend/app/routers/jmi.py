@@ -339,6 +339,18 @@ def trending_skills(
 
 # ── /api/match ────────────────────────────────────────────────────────────────
 
+def _keyword_score(resume_lower: str, all_jobs: list) -> list:
+    """Lightweight skill-overlap scoring used when embedding is unavailable."""
+    scored = []
+    for job in all_jobs:
+        skills = (job.get("skills_required") or []) + (job.get("skills_nice_to_have") or [])
+        hits = sum(1 for s in skills if s.lower() in resume_lower)
+        score = min(0.95, 0.30 + hits * 0.09) if skills else 0.25
+        scored.append((score, {**job, "match_score": round(score * 100, 1)}))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [j for _, j in scored[:20]]
+
+
 def _do_match(resume_text: str, db) -> dict:
     """Blocking match logic — runs in a thread pool to keep the event loop free."""
     import numpy as np
@@ -346,15 +358,32 @@ def _do_match(resume_text: str, db) -> dict:
 
     resume_text = resume_text[:4000]
     resume_hash = hashlib.sha256(resume_text.encode()).hexdigest()
+    resume_lower = resume_text.lower()
 
-    resume_embedding = embed(resume_text)
+    resume_embedding = embed(resume_text)  # None when HF API is rate-limited
+    demo_jobs, _ = get_demo_jobs(limit=800)
+
     if not resume_embedding:
-        raise ValueError("Could not generate embedding for resume")
+        # HF API unavailable — fall back to keyword matching on real + demo jobs
+        logger.info("match: HF embed unavailable, using keyword fallback")
+        try:
+            real_jobs_raw = [
+                _job_row_to_dict(j)
+                for j in db.query(JobPosting).order_by(desc(JobPosting.scraped_at)).limit(300).all()
+            ]
+        except Exception:
+            real_jobs_raw = []
+        top20 = _keyword_score(resume_lower, real_jobs_raw + demo_jobs)
+        return {
+            "matches": top20,
+            "method": "keyword",
+            "note": "Matched by skill keywords (semantic search temporarily unavailable).",
+        }
 
     resume_vec = np.array(resume_embedding, dtype="float32")
+    scored = []
 
-    # Real jobs with stored embeddings
-    real_pool = []
+    # Real jobs with stored embeddings — vectorised cosine similarity
     try:
         db_jobs = (
             db.query(JobPosting)
@@ -362,6 +391,7 @@ def _do_match(resume_text: str, db) -> dict:
             .order_by(desc(JobPosting.scraped_at))
             .limit(500).all()
         )
+        real_pool = []
         for j in db_jobs:
             emb = j.description_embedding
             if isinstance(emb, str):
@@ -371,29 +401,23 @@ def _do_match(resume_text: str, db) -> dict:
                     continue
             if emb:
                 real_pool.append((_job_row_to_dict(j), np.array(emb, dtype="float32")))
-    except Exception:
-        pass
 
-    demo_jobs, _ = get_demo_jobs(limit=800)
-    scored = []
+        if real_pool:
+            job_dicts, vecs = zip(*real_pool)
+            mat = np.stack(vecs)
+            mat_norm = mat / (np.linalg.norm(mat, axis=1, keepdims=True) + 1e-9)
+            resume_norm = resume_vec / (np.linalg.norm(resume_vec) + 1e-9)
+            sims = mat_norm @ resume_norm
+            for i, job_dict in enumerate(job_dicts):
+                scored.append((float(sims[i]), {**job_dict, "match_score": round(float(sims[i]) * 100, 1)}))
+    except Exception as exc:
+        logger.warning("match: DB embedding query failed: %s", exc)
 
-    # Vectorised cosine similarity for real jobs
-    if real_pool:
-        job_dicts, vecs = zip(*real_pool)
-        mat = np.stack(vecs)
-        norms = np.linalg.norm(mat, axis=1, keepdims=True) + 1e-9
-        mat_norm = mat / norms
-        resume_norm = resume_vec / (np.linalg.norm(resume_vec) + 1e-9)
-        sims = mat_norm @ resume_norm
-        for i, job_dict in enumerate(job_dicts):
-            scored.append((float(sims[i]), {**job_dict, "match_score": round(float(sims[i]) * 100, 1)}))
-
-    # Skill-overlap scoring for demo jobs
-    resume_lower = resume_text.lower()
+    # Skill-overlap for demo jobs (no stored embeddings)
     for dj in demo_jobs:
-        skills = dj.get("skills_required", []) + dj.get("skills_nice_to_have", [])
-        matches = sum(1 for s in skills if s.lower() in resume_lower)
-        score = min(0.95, 0.35 + matches * 0.09)
+        skills = (dj.get("skills_required") or []) + (dj.get("skills_nice_to_have") or [])
+        hits = sum(1 for s in skills if s.lower() in resume_lower)
+        score = min(0.95, 0.35 + hits * 0.09)
         scored.append((score, {**dj, "match_score": round(score * 100, 1)}))
 
     scored.sort(key=lambda x: x[0], reverse=True)
@@ -409,7 +433,11 @@ def _do_match(resume_text: str, db) -> dict:
     except Exception:
         db.rollback()
 
-    return {"matches": top20, "note": "Your resume is embedded locally and not stored in full."}
+    return {
+        "matches": top20,
+        "method": "semantic",
+        "note": "Matched by semantic similarity. Your resume text is not stored in full.",
+    }
 
 
 @router.post("/match")
@@ -436,20 +464,37 @@ async def match_resume(request: Request, body: dict, db: Session = Depends(get_d
 
 # ── /api/extract-resume ───────────────────────────────────────────────────────
 
+_MAX_UPLOAD_BYTES = 3 * 1024 * 1024  # 3 MB
+_MAX_PDF_PAGES = 5
+_MAX_TEXT_CHARS = 6000
+
+
 @router.post("/extract-resume")
 async def extract_resume(file: UploadFile = File(...)):
+    import gc
     filename = (file.filename or "").lower()
     content = await file.read()
 
+    if len(content) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (max 3 MB)")
+
     if filename.endswith(".txt") or file.content_type == "text/plain":
-        return {"text": content.decode("utf-8", errors="replace")}
+        return {"text": content.decode("utf-8", errors="replace")[:_MAX_TEXT_CHARS]}
 
     if filename.endswith(".pdf") or file.content_type == "application/pdf":
         try:
             import pypdf
             reader = pypdf.PdfReader(io.BytesIO(content))
-            text = "\n".join(page.extract_text() or "" for page in reader.pages)
-            return {"text": text}
+            pages = min(len(reader.pages), _MAX_PDF_PAGES)
+            parts = []
+            for i in range(pages):
+                t = reader.pages[i].extract_text()
+                if t:
+                    parts.append(t)
+            del reader
+            del content
+            gc.collect()
+            return {"text": "\n".join(parts)[:_MAX_TEXT_CHARS]}
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"PDF extraction failed: {e}")
 
@@ -458,7 +503,10 @@ async def extract_resume(file: UploadFile = File(...)):
             import docx
             doc = docx.Document(io.BytesIO(content))
             text = "\n".join(p.text for p in doc.paragraphs)
-            return {"text": text}
+            del doc
+            del content
+            gc.collect()
+            return {"text": text[:_MAX_TEXT_CHARS]}
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"DOCX extraction failed: {e}")
 

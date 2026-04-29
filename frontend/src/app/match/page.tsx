@@ -119,6 +119,7 @@ export default function MatchPage() {
   const [isParsing, setIsParsing] = useState(false)
   const [matches, setMatches] = useState<JobPosting[] | null>(null)
   const [note, setNote] = useState('')
+  const [matchMethod, setMatchMethod] = useState<'semantic' | 'keyword' | null>(null)
   const [backendError, setBackendError] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -155,11 +156,13 @@ export default function MatchPage() {
     const timeout = setTimeout(() => abortRef.current?.abort(), 120_000)
     setIsLoading(true)
     setMatches(null)
+    setMatchMethod(null)
     setBackendError(false)
     try {
       const result = await api.matchResume(resumeText, abortRef.current.signal)
       setMatches(result.matches)
       setNote(result.note ?? '')
+      setMatchMethod((result as any).method ?? null)
       if (result.matches.length === 0) {
         toast.info('No matches found yet — the job database may still be building up.')
       }
@@ -255,7 +258,19 @@ export default function MatchPage() {
                 <h2 className="text-lg font-semibold">
                   {matches.length > 0 ? `${matches.length} Best-Fit Roles` : 'No matches found'}
                 </h2>
-                <span className="text-foreground-muted text-sm">Ranked by embedding similarity</span>
+                <div className="flex items-center gap-2">
+                  {matchMethod === 'keyword' && (
+                    <span className="text-xs px-2 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-400">
+                      Keyword match
+                    </span>
+                  )}
+                  {matchMethod === 'semantic' && (
+                    <span className="text-xs px-2 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-green-400">
+                      Semantic match
+                    </span>
+                  )}
+                  <span className="text-foreground-muted text-sm">Ranked by similarity</span>
+                </div>
               </div>
               <div className="space-y-3">
                 {matches.map((job, i) => (
@@ -269,11 +284,11 @@ export default function MatchPage() {
         {isLoading && (
           <div className="text-center py-16">
             <div className="w-12 h-12 rounded-full border-2 border-primary-500/30 border-t-primary-500 animate-spin mx-auto mb-4" />
-            <p className="text-foreground-secondary">Generating embeddings and searching &gt;10k jobs…</p>
-            <p className="text-foreground-muted text-sm mt-2">{elapsed}s elapsed</p>
-            {elapsed >= 10 && (
+            <p className="text-foreground-secondary">Matching your resume against the job pool…</p>
+            <p className="text-foreground-muted text-sm mt-2">{elapsed}s elapsed · usually 10–20s</p>
+            {elapsed >= 15 && (
               <p className="text-yellow-400/80 text-xs mt-2">
-                First run loads the AI model — usually takes 30–90s. Hang tight.
+                Embedding API is warming up — almost there.
               </p>
             )}
           </div>

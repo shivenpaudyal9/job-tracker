@@ -1,67 +1,65 @@
 """
-Local embedding generation using sentence-transformers all-MiniLM-L6-v2.
-384-dimensional output. Free, no API calls required.
-Model is loaded once and cached for the process lifetime.
+Embedding generation via HuggingFace Inference API (no local model loaded).
+Falls back to None on rate-limit/error; callers handle gracefully.
 """
 
 import logging
+import os
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+import requests
+import numpy as np
 
-_model = None
+logger = logging.getLogger(__name__)
 EMBEDDING_DIM = 384
 
-
-def _get_model():
-    global _model
-    if _model is None:
-        try:
-            from sentence_transformers import SentenceTransformer
-            logger.info("Loading all-MiniLM-L6-v2 (first load may download ~90MB)...")
-            _model = SentenceTransformer("all-MiniLM-L6-v2")
-            logger.info("Embedding model loaded.")
-        except ImportError:
-            logger.error("sentence-transformers not installed. Run: pip install sentence-transformers")
-            raise
-    return _model
+_HF_URL = (
+    "https://api-inference.huggingface.co"
+    "/pipeline/feature-extraction"
+    "/sentence-transformers/all-MiniLM-L6-v2"
+)
+_HF_TOKEN = os.getenv("HF_TOKEN", "")
 
 
 def embed(text: str) -> Optional[list[float]]:
+    """Return a 384-dim embedding via HF Inference API, or None on failure."""
     if not text or not text.strip():
         return None
+
+    headers: dict = {"Authorization": f"Bearer {_HF_TOKEN}"} if _HF_TOKEN else {}
     try:
-        model = _get_model()
-        vector = model.encode(text, normalize_embeddings=True)
-        return vector.tolist()
+        resp = requests.post(
+            _HF_URL,
+            json={"inputs": text[:2048], "options": {"wait_for_model": True}},
+            headers=headers,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        # HF feature-extraction returns: (1, tokens, 384) or (tokens, 384) or (384,)
+        # Mean-pool whatever shape we get down to a 384-dim vector.
+        arr = np.array(data, dtype="float32")
+        if arr.ndim == 3:
+            arr = arr[0]          # (tokens, 384)
+        if arr.ndim == 2:
+            arr = arr.mean(axis=0)  # (384,)
+        if arr.ndim == 1 and len(arr) >= 100:
+            return arr.tolist()
+
+        logger.warning("HF embed: unexpected shape %s", arr.shape)
+        return None
     except Exception as e:
-        logger.error("Embedding failed: %s", e)
+        logger.warning("HF embed failed (%s): %s", type(e).__name__, e)
         return None
 
 
 def embed_batch(texts: list[str]) -> list[Optional[list[float]]]:
-    if not texts:
-        return []
-    try:
-        model = _get_model()
-        non_empty = [(i, t) for i, t in enumerate(texts) if t and t.strip()]
-        if not non_empty:
-            return [None] * len(texts)
-
-        indices, valid_texts = zip(*non_empty)
-        vectors = model.encode(list(valid_texts), normalize_embeddings=True, batch_size=32)
-
-        results: list[Optional[list[float]]] = [None] * len(texts)
-        for idx, vec in zip(indices, vectors):
-            results[idx] = vec.tolist()
-        return results
-    except Exception as e:
-        logger.error("Batch embedding failed: %s", e)
-        return [None] * len(texts)
+    """Embed each text individually (HF free tier doesn't batch well)."""
+    return [embed(t) for t in texts]
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
-    """Pure-Python cosine similarity for the non-pgvector fallback path."""
     import math
     dot = sum(x * y for x, y in zip(a, b))
     mag_a = math.sqrt(sum(x * x for x in a))
