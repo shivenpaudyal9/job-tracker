@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Search, X, Briefcase, ChevronDown, TrendingUp } from 'lucide-react'
+import { Search, X, Briefcase, ChevronDown, TrendingUp, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { JobCard, JobCardSkeleton } from '@/components/JobCard'
@@ -55,6 +55,32 @@ const LEVEL_TO_SENIORITY: Record<string, string[]> = {
   entry: ['intern', 'junior'],
   mid: ['mid'],
   senior: ['senior', 'staff', 'principal'],
+}
+
+// ── Freshness banner ──────────────────────────────────────────────────────────
+
+function FreshnessBanner({ stats }: { stats: any }) {
+  if (!stats?.last_scrape_at || stats.data_source === 'demo') return null
+
+  const last = new Date(stats.last_scrape_at)
+  const diffMs = Date.now() - last.getTime()
+  const diffH = Math.floor(diffMs / 3_600_000)
+  const diffM = Math.floor((diffMs % 3_600_000) / 60_000)
+  const agoText = diffH >= 1 ? `${diffH}h ago` : `${diffM}m ago`
+
+  return (
+    <div className="flex items-center justify-between text-xs px-3 py-2 rounded-lg bg-foreground-muted/5 border border-foreground-muted/10 mb-4">
+      <div className="flex items-center gap-1.5">
+        <Clock className="w-3 h-3 text-foreground-muted" />
+        <span className="text-foreground-muted">Last scrape: <span className="text-foreground-secondary">{agoText}</span></span>
+      </div>
+      <div className="text-foreground-muted">
+        <span className="text-green-400 font-medium">{stats.jobs_last_4h ?? 0}</span> new in 4h
+        {' · '}
+        <span className="text-primary-400 font-medium">{stats.jobs_last_24h ?? 0}</span> today
+      </div>
+    </div>
+  )
 }
 
 // ── Custom dropdown ───────────────────────────────────────────────────────────
@@ -136,6 +162,13 @@ export default function JobsPageClient() {
     limit: 20,
   }
 
+  const { data: jmiStats } = useQuery({
+    queryKey: ['jmi-stats'],
+    queryFn: () => api.getJMIStats(),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  })
+
   const { isLoading, isFetching, isError } = useQuery({
     queryKey: ['jobs-list', queryParams],
     queryFn: async () => {
@@ -214,6 +247,9 @@ export default function JobsPageClient() {
           </div>
         </motion.div>
 
+        {/* Freshness banner */}
+        <FreshnessBanner stats={jmiStats} />
+
         {/* Filters */}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
           <Card glass className="mb-6 p-4">
@@ -221,7 +257,7 @@ export default function JobsPageClient() {
               {/* Quick chips */}
               <div className="flex flex-wrap gap-2">
                 {([
-                  { id: 'hot', label: '🔥 Hot 4h', active: postedWithin === '4h', action: () => setPostedWithin(v => v === '4h' ? '' : '4h') },
+                  { id: 'hot', label: '🔥 Last 4h', active: postedWithin === '4h', action: () => setPostedWithin(v => v === '4h' ? '' : '4h') },
                   { id: 'entry', label: '🎓 Entry-Level', active: entryLevel, action: () => setEntryLevel(v => !v) },
                   { id: 'remote', label: '🌍 Remote', active: workType === 'remote', action: () => setWorkType(v => v === 'remote' ? '' : 'remote') },
                   { id: 'visa', label: '✈️ Visa OK', active: visaOnly, action: () => setVisaOnly(v => !v) },
@@ -307,8 +343,24 @@ export default function JobsPageClient() {
           ) : allJobs.length === 0 ? (
             <div className="text-center py-16">
               <Briefcase className="w-10 h-10 text-foreground-muted mx-auto mb-3" />
-              <p className="text-foreground-secondary">No jobs match your filters.</p>
-              <button onClick={resetFilters} className="mt-3 text-primary-400 text-sm hover:underline">Reset filters</button>
+              {postedWithin === '4h' ? (
+                <>
+                  <p className="text-foreground-secondary font-medium">No new jobs in the last 4 hours.</p>
+                  <p className="text-foreground-muted text-sm mt-1">The scraper runs every 4h — try "Last 24h" or "Last 7 days".</p>
+                  <button onClick={() => { applyFilter(() => setPostedWithin('24h')) }} className="mt-3 text-primary-400 text-sm hover:underline">Show last 24h</button>
+                </>
+              ) : postedWithin === '24h' ? (
+                <>
+                  <p className="text-foreground-secondary font-medium">No new jobs scraped today yet.</p>
+                  <p className="text-foreground-muted text-sm mt-1">The scraper runs every 4 hours — check back soon.</p>
+                  <button onClick={resetFilters} className="mt-3 text-primary-400 text-sm hover:underline">Reset filters</button>
+                </>
+              ) : (
+                <>
+                  <p className="text-foreground-secondary">No jobs match your filters.</p>
+                  <button onClick={resetFilters} className="mt-3 text-primary-400 text-sm hover:underline">Reset filters</button>
+                </>
+              )}
             </div>
           ) : (
             <>

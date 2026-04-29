@@ -26,7 +26,8 @@ from app.demo_loader import get_demo_jobs, total_demo_count
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["JMI Public"])
 
-DEMO_THRESHOLD = 200  # use demo data when real count < this
+# Demo data is shown ONLY when the database has zero real scraped jobs.
+# A non-zero real job count always takes precedence, no threshold.
 
 try:
     from slowapi import Limiter
@@ -59,20 +60,19 @@ def _job_row_to_dict(j: JobPosting) -> dict:
     }
 
 
-def _data_source_label(real_count: int, demo_count: int, last_scrape) -> dict:
-    if real_count >= DEMO_THRESHOLD:
+def _data_source_label(real_count: int, last_scrape) -> dict:
+    if real_count > 0:
         ago = ""
         if last_scrape:
             delta = datetime.utcnow() - last_scrape.replace(tzinfo=None)
             h = int(delta.total_seconds() // 3600)
-            ago = f" — last scrape {h}h ago" if h < 48 else ""
+            m = int((delta.total_seconds() % 3600) // 60)
+            if h == 0:
+                ago = f" — scraped {m}m ago"
+            elif h < 48:
+                ago = f" — scraped {h}h ago"
         return {"data_source": "live", "label": f"Live data{ago}"}
-    elif real_count > 0:
-        return {"data_source": "hybrid",
-                "label": f"Live data + sample backfill ({real_count} fresh jobs scraped)"}
-    else:
-        return {"data_source": "demo",
-                "label": "Sample data shown — daily scraper runs at 6am UTC"}
+    return {"data_source": "demo", "label": "Sample data — scraper runs every 4h"}
 
 
 # ── /api/stats ────────────────────────────────────────────────────────────────
@@ -81,28 +81,36 @@ def _data_source_label(real_count: int, demo_count: int, last_scrape) -> dict:
 def public_stats(request: Request, db: Session = Depends(get_db)):
     try:
         real_count = db.query(func.count(JobPosting.id)).scalar() or 0
-        week_ago = datetime.utcnow() - timedelta(days=7)
+        now = datetime.utcnow()
+        jobs_last_4h = (
+            db.query(func.count(JobPosting.id))
+            .filter(JobPosting.scraped_at >= now - timedelta(hours=4)).scalar() or 0
+        )
+        jobs_last_24h = (
+            db.query(func.count(JobPosting.id))
+            .filter(JobPosting.scraped_at >= now - timedelta(hours=24)).scalar() or 0
+        )
         jobs_this_week = (
             db.query(func.count(JobPosting.id))
-            .filter(JobPosting.scraped_at >= week_ago).scalar() or 0
+            .filter(JobPosting.scraped_at >= now - timedelta(days=7)).scalar() or 0
         )
         companies_real = db.query(func.count(func.distinct(JobPosting.company))).scalar() or 0
         last_row = db.query(JobPosting.scraped_at).order_by(desc(JobPosting.scraped_at)).first()
         last_scrape = last_row[0] if last_row else None
     except Exception:
-        real_count = jobs_this_week = companies_real = 0
+        real_count = jobs_last_4h = jobs_last_24h = jobs_this_week = companies_real = 0
         last_scrape = None
 
-    demo_total = total_demo_count()
-    total = max(real_count + demo_total, real_count)
     companies_total = max(companies_real, 40)
 
     return {
-        "total_jobs_scraped": real_count + demo_total if real_count < DEMO_THRESHOLD else real_count,
-        "jobs_this_week": jobs_this_week if real_count >= DEMO_THRESHOLD else jobs_this_week + 47,
+        "total_jobs_scraped": real_count if real_count > 0 else total_demo_count(),
+        "jobs_this_week": jobs_this_week,
+        "jobs_last_4h": jobs_last_4h,
+        "jobs_last_24h": jobs_last_24h,
         "companies_tracked": companies_total,
         "last_scrape_at": last_scrape.isoformat() if last_scrape else None,
-        **_data_source_label(real_count, demo_total, last_scrape),
+        **_data_source_label(real_count, last_scrape),
     }
 
 
@@ -123,7 +131,7 @@ def weekly_trends(request: Request, db: Session = Depends(get_db)):
         real_count = 0
         last_scrape = None
 
-    source_info = _data_source_label(real_count, total_demo_count(), last_scrape)
+    source_info = _data_source_label(real_count, last_scrape)
 
     if report:
         return {
@@ -188,10 +196,15 @@ def recent_jobs(
     except Exception:
         real_jobs = []
 
-    if len(real_jobs) < limit:
-        needed = limit - len(real_jobs)
-        demo, _ = get_demo_jobs(role_category=role, limit=needed)
-        real_jobs += demo
+    # Only pad with demo when there are genuinely no real jobs in the DB
+    if not real_jobs:
+        try:
+            total_real_in_db = db.query(func.count(JobPosting.id)).scalar() or 0
+        except Exception:
+            total_real_in_db = 0
+        if total_real_in_db == 0:
+            demo, _ = get_demo_jobs(role_category=role, limit=limit)
+            real_jobs = demo
 
     return {"total": len(real_jobs), "data": real_jobs}
 
@@ -261,43 +274,46 @@ def list_jobs(
 
         real_total = q.count()
         real_jobs = [_job_row_to_dict(j) for j in q.offset(offset).limit(limit).all()]
+        # Unfiltered DB count — determines whether to fall back to demo at all
+        total_real_in_db = db.query(func.count(JobPosting.id)).scalar() or 0
         last_row = db.query(JobPosting.scraped_at).order_by(desc(JobPosting.scraped_at)).first()
         last_scrape = last_row[0] if last_row else None
     except Exception as e:
         logger.warning("DB query failed in list_jobs: %s", e)
-        real_jobs, real_total, last_scrape = [], 0, None
+        real_jobs, real_total, total_real_in_db, last_scrape = [], 0, 0, None
 
-    source_info = _data_source_label(real_total, total_demo_count(), last_scrape)
+    # Use demo ONLY when the database is genuinely empty (zero real jobs ever scraped).
+    # Time-filtered views (4h/24h/7d) always show the real empty state — never pad with demo.
+    is_time_filtered = bool(posted_within and posted_within not in ("all", "30d"))
+    use_demo = (total_real_in_db == 0 and not is_time_filtered)
 
-    # Fill with demo data if below threshold
-    if real_total < DEMO_THRESHOLD:
+    if use_demo:
         demo_all, demo_total = get_demo_jobs(
             search=search, role_category=role_category,
             seniority=seniority, remote_only=remote_only, visa_only=visa_only,
             entry_level=entry_level, city=city,
             limit=10000,
         )
-
         if sort == "salary_desc":
             demo_all.sort(key=lambda j: (j.get("salary_max") or 0), reverse=True)
+        demo_page = demo_all[offset: offset + limit]
+        return {
+            "jobs": demo_page,
+            "total": demo_total,
+            "page": page,
+            "limit": limit,
+            "has_more": (offset + limit) < demo_total,
+            "data_source": "demo",
+            "label": "Sample data — scraper runs every 4h",
+        }
 
-        # Page through demo, skip items already covered by real data
-        demo_offset = max(0, offset - real_total)
-        demo_needed = limit - len(real_jobs)
-        demo_page = demo_all[demo_offset: demo_offset + demo_needed] if demo_needed > 0 else []
-
-        jobs = real_jobs + demo_page
-        total = real_total + demo_total
-    else:
-        jobs = real_jobs
-        total = real_total
-
+    source_info = _data_source_label(total_real_in_db, last_scrape)
     return {
-        "jobs": jobs,
-        "total": total,
+        "jobs": real_jobs,
+        "total": real_total,
         "page": page,
         "limit": limit,
-        "has_more": (offset + limit) < total,
+        "has_more": (offset + limit) < real_total,
         **source_info,
     }
 

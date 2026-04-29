@@ -182,8 +182,12 @@ export interface RegisterRequest {
 export interface JMIStats {
   total_jobs_scraped: number
   jobs_this_week: number
+  jobs_last_4h: number
+  jobs_last_24h: number
   companies_tracked: number
   last_scrape_at: string | null
+  data_source: 'live' | 'demo'
+  label: string
 }
 
 export interface JobPosting {
