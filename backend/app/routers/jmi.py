@@ -11,7 +11,11 @@ from datetime import datetime, timedelta, date
 from typing import Optional
 
 import io
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends, Query, Request, UploadFile, File, HTTPException
+
+_executor = ThreadPoolExecutor(max_workers=2)
 from sqlalchemy import func, desc, or_, cast, String
 from sqlalchemy.orm import Session
 
@@ -49,6 +53,9 @@ def _job_row_to_dict(j: JobPosting) -> dict:
         "scraped_at": j.scraped_at.isoformat() if j.scraped_at else None,
         "posted_at": j.posted_at.isoformat() if j.posted_at else None,
         "match_score": None,
+        "is_entry_level": getattr(j, "is_entry_level", False) or False,
+        "city": getattr(j, "city", None),
+        "state": getattr(j, "state", None),
     }
 
 
@@ -191,6 +198,9 @@ def recent_jobs(
 
 # ── /api/jobs/list (full job board) ──────────────────────────────────────────
 
+_POSTED_WITHIN_HOURS = {"4h": 4, "24h": 24, "7d": 7 * 24, "30d": 30 * 24}
+
+
 @router.get("/jobs/list")
 def list_jobs(
     request: Request,
@@ -199,6 +209,9 @@ def list_jobs(
     seniority: Optional[str] = None,
     remote_only: bool = False,
     visa_only: bool = False,
+    entry_level: bool = False,
+    posted_within: Optional[str] = Query(None, regex="^(4h|24h|7d|30d|all)?$"),
+    city: Optional[str] = None,
     sort: str = Query("newest", regex="^(newest|salary_desc|match)$"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=50),
@@ -224,6 +237,22 @@ def list_jobs(
             q = q.filter(JobPosting.remote == True)
         if visa_only:
             q = q.filter(JobPosting.visa_sponsorship == True)
+        if entry_level:
+            try:
+                q = q.filter(JobPosting.is_entry_level == True)
+            except Exception:
+                pass
+        if posted_within and posted_within != "all" and posted_within in _POSTED_WITHIN_HOURS:
+            cutoff = datetime.utcnow() - timedelta(hours=_POSTED_WITHIN_HOURS[posted_within])
+            q = q.filter(JobPosting.scraped_at >= cutoff)
+        if city:
+            try:
+                q = q.filter(or_(
+                    JobPosting.city.ilike(f"%{city}%"),
+                    JobPosting.location.ilike(f"%{city}%"),
+                ))
+            except Exception:
+                q = q.filter(JobPosting.location.ilike(f"%{city}%"))
 
         if sort == "salary_desc":
             q = q.order_by(desc(JobPosting.salary_max).nullslast(), desc(JobPosting.scraped_at))
@@ -245,6 +274,7 @@ def list_jobs(
         demo_all, demo_total = get_demo_jobs(
             search=search, role_category=role_category,
             seniority=seniority, remote_only=remote_only, visa_only=visa_only,
+            entry_level=entry_level, city=city,
             limit=10000,
         )
 
@@ -309,25 +339,21 @@ def trending_skills(
 
 # ── /api/match ────────────────────────────────────────────────────────────────
 
-@router.post("/match")
-def match_resume(request: Request, body: dict, db: Session = Depends(get_db)):
-    resume_text = body.get("resume_text", "")
-    if not resume_text or len(resume_text.strip()) < 50:
-        return {"error": "resume_text must be at least 50 characters"}
+def _do_match(resume_text: str, db) -> dict:
+    """Blocking match logic — runs in a thread pool to keep the event loop free."""
+    import numpy as np
+    from embeddings.generator import embed
 
+    resume_text = resume_text[:4000]
     resume_hash = hashlib.sha256(resume_text.encode()).hexdigest()
 
-    try:
-        from embeddings.generator import embed, cosine_similarity
-        resume_embedding = embed(resume_text)
-    except Exception as e:
-        logger.error("Embedding failed: %s", e)
-        return {"error": "Embedding service unavailable"}
-
+    resume_embedding = embed(resume_text)
     if not resume_embedding:
-        return {"error": "Could not generate embedding for resume"}
+        raise ValueError("Could not generate embedding for resume")
 
-    # Collect real jobs with embeddings
+    resume_vec = np.array(resume_embedding, dtype="float32")
+
+    # Real jobs with stored embeddings
     real_pool = []
     try:
         db_jobs = (
@@ -336,40 +362,43 @@ def match_resume(request: Request, body: dict, db: Session = Depends(get_db)):
             .order_by(desc(JobPosting.scraped_at))
             .limit(500).all()
         )
-        real_pool = [(_job_row_to_dict(j), j.description_embedding) for j in db_jobs]
+        for j in db_jobs:
+            emb = j.description_embedding
+            if isinstance(emb, str):
+                try:
+                    emb = json.loads(emb)
+                except Exception:
+                    continue
+            if emb:
+                real_pool.append((_job_row_to_dict(j), np.array(emb, dtype="float32")))
     except Exception:
         pass
 
-    # Add demo jobs (text-based similarity via skill overlap)
     demo_jobs, _ = get_demo_jobs(limit=800)
-
     scored = []
 
-    # Score real jobs by embedding similarity
-    for job_dict, emb in real_pool:
-        if isinstance(emb, str):
-            try:
-                emb = json.loads(emb)
-            except Exception:
-                continue
-        if emb:
-            score = cosine_similarity(resume_embedding, emb)
-            j = {**job_dict, "match_score": round(score * 100, 1)}
-            scored.append((score, j))
+    # Vectorised cosine similarity for real jobs
+    if real_pool:
+        job_dicts, vecs = zip(*real_pool)
+        mat = np.stack(vecs)
+        norms = np.linalg.norm(mat, axis=1, keepdims=True) + 1e-9
+        mat_norm = mat / norms
+        resume_norm = resume_vec / (np.linalg.norm(resume_vec) + 1e-9)
+        sims = mat_norm @ resume_norm
+        for i, job_dict in enumerate(job_dicts):
+            scored.append((float(sims[i]), {**job_dict, "match_score": round(float(sims[i]) * 100, 1)}))
 
-    # Score demo jobs by skill overlap with resume text
+    # Skill-overlap scoring for demo jobs
     resume_lower = resume_text.lower()
     for dj in demo_jobs:
         skills = dj.get("skills_required", []) + dj.get("skills_nice_to_have", [])
         matches = sum(1 for s in skills if s.lower() in resume_lower)
         score = min(0.95, 0.35 + matches * 0.09)
-        j = {**dj, "match_score": round(score * 100, 1)}
-        scored.append((score, j))
+        scored.append((score, {**dj, "match_score": round(score * 100, 1)}))
 
     scored.sort(key=lambda x: x[0], reverse=True)
     top20 = [j for _, j in scored[:20]]
 
-    # Log usage
     try:
         db.add(ResumeMatch(
             resume_hash=resume_hash,
@@ -380,10 +409,29 @@ def match_resume(request: Request, body: dict, db: Session = Depends(get_db)):
     except Exception:
         db.rollback()
 
-    return {
-        "matches": top20,
-        "note": "Your resume is embedded locally and not stored in full.",
-    }
+    return {"matches": top20, "note": "Your resume is embedded locally and not stored in full."}
+
+
+@router.post("/match")
+async def match_resume(request: Request, body: dict, db: Session = Depends(get_db)):
+    resume_text = (body.get("resume_text") or "").strip()
+    if len(resume_text) < 50:
+        raise HTTPException(status_code=400, detail="resume_text must be at least 50 characters")
+
+    loop = asyncio.get_event_loop()
+    try:
+        result = await asyncio.wait_for(
+            loop.run_in_executor(_executor, _do_match, resume_text, db),
+            timeout=90.0,
+        )
+        return result
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Matching timed out — model is loading. Try again in 30s.")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        logger.error("match_resume error: %s", e)
+        raise HTTPException(status_code=500, detail=f"Matching failed: {e}")
 
 
 # ── /api/extract-resume ───────────────────────────────────────────────────────

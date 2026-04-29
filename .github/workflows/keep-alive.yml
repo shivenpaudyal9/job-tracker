@@ -1,0 +1,22 @@
+name: Keep Backend Warm
+
+on:
+  schedule:
+    - cron: '*/14 * * * *'   # every 14 minutes — free tier sleeps at 15 min
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping backend health endpoint
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 30 \
+            "${{ secrets.BACKEND_URL }}/health" || echo "000")
+          echo "Backend status: $STATUS"
+          if [ "$STATUS" = "000" ]; then
+            echo "Backend unreachable — cold starting"
+          else
+            echo "Backend alive"
+          fi

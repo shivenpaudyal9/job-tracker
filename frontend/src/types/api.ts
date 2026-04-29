@@ -206,6 +206,9 @@ export interface JobPosting {
   is_demo: boolean
   scraped_at: string | null
   posted_at: string | null
+  is_entry_level: boolean
+  city: string | null
+  state: string | null
 }
 
 export interface SkillTrend {
@@ -262,6 +265,9 @@ export interface JobsListParams {
   seniority?: string
   remote_only?: boolean
   visa_only?: boolean
+  entry_level?: boolean
+  posted_within?: '4h' | '24h' | '7d' | '30d' | 'all'
+  city?: string
   sort?: 'newest' | 'salary_desc' | 'match'
   page?: number
   limit?: number

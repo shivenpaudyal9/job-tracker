@@ -40,6 +40,8 @@ async function handler(
   })
 }
 
+export const maxDuration = 120 // seconds — needed for embedding generation on cold start
+
 export const GET = handler
 export const POST = handler
 export const PUT = handler

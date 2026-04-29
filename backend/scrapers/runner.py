@@ -6,7 +6,7 @@ Called by the daily scrape cron job.
 import logging
 from typing import Optional
 
-from scrapers import greenhouse, lever, linkedin
+from scrapers import greenhouse, lever, linkedin, ashby
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +15,7 @@ def run_all(
     run_greenhouse: bool = True,
     run_lever: bool = True,
     run_linkedin: bool = True,
+    run_ashby: bool = True,
 ) -> list[dict]:
     all_postings: list[dict] = []
     seen_urls: set[str] = set()
@@ -47,6 +48,12 @@ def run_all(
             _add(linkedin.scrape(), "LinkedIn")
         except Exception as e:
             logger.error("LinkedIn scraper failed: %s", e)
+
+    if run_ashby:
+        try:
+            _add(ashby.scrape(), "Ashby")
+        except Exception as e:
+            logger.error("Ashby scraper failed: %s", e)
 
     logger.info("Total unique postings from all sources: %d", len(all_postings))
     return all_postings

@@ -33,6 +33,8 @@ def get_demo_jobs(
     seniority: Optional[str] = None,
     remote_only: bool = False,
     visa_only: bool = False,
+    entry_level: bool = False,
+    city: Optional[str] = None,
     limit: int = 200,
     offset: int = 0,
 ) -> tuple[list, int]:
@@ -54,6 +56,11 @@ def get_demo_jobs(
         jobs = [j for j in jobs if j.get("remote")]
     if visa_only:
         jobs = [j for j in jobs if j.get("visa_sponsorship") is True]
+    if entry_level:
+        jobs = [j for j in jobs if j.get("is_entry_level") or j.get("seniority") in ("intern", "junior")]
+    if city:
+        c = city.lower()
+        jobs = [j for j in jobs if c in (j.get("city") or j.get("location") or "").lower()]
 
     total = len(jobs)
     return jobs[offset: offset + limit], total

@@ -20,19 +20,22 @@ if DATABASE_URL.startswith("sqlite"):
     print("SQLite tables created via ORM.")
     sys.exit(0)
 
-sql_file = os.path.join(os.path.dirname(__file__), "001_jmi_tables.sql")
-with open(sql_file) as f:
-    sql = f.read()
-
 from sqlalchemy import text
-with engine.connect() as conn:
-    for statement in sql.split(";"):
-        stmt = statement.strip()
-        if stmt:
-            try:
-                conn.execute(text(stmt))
-            except Exception as e:
-                print(f"Warning: {e}")
-    conn.commit()
 
-print("Migration 001_jmi_tables applied successfully.")
+for migration in ["001_jmi_tables.sql", "002_jmi_columns.sql"]:
+    sql_file = os.path.join(os.path.dirname(__file__), migration)
+    if not os.path.exists(sql_file):
+        print(f"Skipping {migration} (not found)")
+        continue
+    with open(sql_file) as f:
+        sql = f.read()
+    with engine.connect() as conn:
+        for statement in sql.split(";"):
+            stmt = statement.strip()
+            if stmt:
+                try:
+                    conn.execute(text(stmt))
+                except Exception as e:
+                    print(f"Warning ({migration}): {e}")
+        conn.commit()
+    print(f"Migration {migration} applied.")

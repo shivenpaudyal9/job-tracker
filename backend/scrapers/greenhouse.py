@@ -11,13 +11,34 @@ import requests
 logger = logging.getLogger(__name__)
 
 COMPANIES = [
-    "stripe", "airbnb", "dropbox", "pinterest", "roblox", "discord",
-    "figma", "notion", "openai", "anthropic", "scale", "huggingface",
-    "databricks", "snowflake", "coinbase", "instacart", "doordash",
-    "affirm", "asana", "benchling", "betterup", "block", "carta",
-    "cloudflare", "datadog", "duolingo", "github", "gusto",
-    "mongodb", "okta", "opendoor", "palantir", "rippling",
-    "samsara", "twilio", "zoom", "atlassian",
+    # AI / ML orgs
+    "openai", "anthropic", "scale", "huggingface", "cohere", "runway",
+    "anyscale", "together", "inflection", "adept", "modal", "replicate",
+    "character", "perplexity", "mistral",
+    # Data & analytics platforms
+    "databricks", "snowflake", "fivetran", "airbyte", "dbtlabs",
+    "montecarlo", "hex", "preset", "atlan", "singlestore",
+    # Cloud / infra
+    "cloudflare", "datadog", "samsara", "pagerduty", "grafana",
+    "hashicorp", "supabase", "vercel", "netlify", "render",
+    # FinTech
+    "stripe", "coinbase", "affirm", "carta", "rippling", "gusto",
+    "nerdwallet", "chime", "marqeta", "payoneer",
+    # Consumer / prosumer
+    "airbnb", "dropbox", "pinterest", "roblox", "discord",
+    "figma", "notion", "duolingo", "loom", "miro", "canva",
+    # Enterprise SaaS
+    "github", "twilio", "zoom", "okta", "atlassian", "mongodb",
+    "asana", "amplitude", "calendly", "deel", "lattice", "retool",
+    "intercom", "zendesk", "hubspot", "contentful", "iterable",
+    # E-commerce / logistics
+    "instacart", "doordash", "opendoor", "flexport", "stitch-fix",
+    "wayfair", "faire", "shipbob",
+    # Biotech / healthcare
+    "benchling", "veeva", "tempus", "natera", "recursion", "guardant",
+    # Other high-signal
+    "palantir", "block", "betterup", "lyft", "benchling",
+    "okta", "adyen", "brainly",
 ]
 
 ML_KEYWORDS = {

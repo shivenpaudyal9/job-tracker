@@ -41,6 +41,9 @@ class JobPosting(JMIBase):
     scraped_at = Column(DateTime, server_default=func.now(), index=True)
     posted_at = Column(DateTime)
     role_category = Column(String(50), index=True)
+    is_entry_level = Column(Boolean, default=False, index=True)
+    city = Column(String(100))
+    state = Column(String(50))
 
 
 class SkillTrend(JMIBase):

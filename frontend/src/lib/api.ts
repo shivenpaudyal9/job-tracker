@@ -293,11 +293,32 @@ class ApiClient {
     if (params.seniority) q.append('seniority', params.seniority)
     if (params.remote_only) q.append('remote_only', 'true')
     if (params.visa_only) q.append('visa_only', 'true')
+    if (params.entry_level) q.append('entry_level', 'true')
+    if (params.posted_within && params.posted_within !== 'all') q.append('posted_within', params.posted_within)
+    if (params.city) q.append('city', params.city)
     if (params.sort) q.append('sort', params.sort)
     if (params.page) q.append('page', String(params.page))
     if (params.limit) q.append('limit', String(params.limit))
     const qs = q.toString()
-    return this.request(`/api/jobs/list${qs ? `?${qs}` : ''}`)
+    const endpoint = `/api/jobs/list${qs ? `?${qs}` : ''}`
+
+    // 10-minute sessionStorage cache — survives cold start, cleared on tab close
+    const cacheKey = `jmi:${endpoint}`
+    try {
+      const cached = sessionStorage.getItem(cacheKey)
+      if (cached) {
+        const { data, ts } = JSON.parse(cached)
+        if (Date.now() - ts < 10 * 60 * 1000) return data
+      }
+    } catch {}
+
+    const data = await this.request<JobsListResponse>(endpoint)
+
+    try {
+      sessionStorage.setItem(cacheKey, JSON.stringify({ data, ts: Date.now() }))
+    } catch {}
+
+    return data
   }
 }
 

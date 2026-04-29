@@ -11,10 +11,26 @@ import requests
 logger = logging.getLogger(__name__)
 
 COMPANIES = [
-    "netflix", "mixpanel", "brex", "robinhood", "plaid", "ramp",
-    "gitlab", "posthog", "vercel", "replit", "scale-ai", "weights-biases",
-    "airtable", "automattic", "circleci", "elastic", "everlaw",
-    "harness", "mux", "nylas", "replicate", "vimeo",
+    # Streaming / media
+    "netflix",
+    # AI / ML
+    "scale-ai", "weights-biases", "cohere", "huggingface", "together-ai",
+    "coreweave", "baseten", "fal", "pika-labs", "midjourney",
+    # Data / analytics
+    "mixpanel", "amplitude", "segment", "rudderstack", "census-data",
+    # FinTech
+    "brex", "robinhood", "plaid", "ramp", "mercury",
+    "modern-treasury", "moov", "unit-finance",
+    # Developer tools / infra
+    "gitlab", "posthog", "replit", "vercel", "netlify-inc",
+    "fly-io", "railway", "neon", "upstash", "trigger-dev",
+    "harness", "circleci", "mux",
+    # Productivity / SaaS
+    "airtable", "automattic", "nylas", "vimeo", "replicate",
+    "everlaw", "elastic",
+    # B2B / enterprise
+    "dbt-labs", "airbyte", "confluent", "starburst",
+    "prefect", "dagster-labs", "hightouch",
 ]
 
 ML_KEYWORDS = {

@@ -11,6 +11,7 @@ Steps:
 """
 
 import os
+import re
 import sys
 import logging
 from datetime import datetime, date, timedelta, timezone
@@ -37,6 +38,40 @@ JMIBase.metadata.create_all(bind=engine)
 from scrapers.runner import run_all
 from llm.extractor import extract
 from embeddings.generator import embed
+
+_ENTRY_KEYWORDS = {
+    "entry", "junior", "new grad", "new graduate", "intern", "internship",
+    "associate", "early career", "early-career", "fresh grad", "0-2 years",
+    "0-1 year", "level i ", " i -", "sde i", "sde1", "l1 ", "level 1",
+}
+
+_US_STATE_ABBRS = {
+    "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN",
+    "IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV",
+    "NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN",
+    "TX","UT","VT","VA","WA","WV","WI","WY","DC",
+}
+
+
+def _is_entry_level(title: str, description: str) -> bool:
+    text = (title + " " + (description or "")[:300]).lower()
+    return any(kw in text for kw in _ENTRY_KEYWORDS)
+
+
+def _extract_city_state(location: str) -> tuple:
+    if not location:
+        return None, None
+    # "City, ST" pattern
+    m = re.match(r"^([^,\(]+),\s*([A-Z]{2})\b", location.strip())
+    if m and m.group(2) in _US_STATE_ABBRS:
+        return m.group(1).strip(), m.group(2)
+    parts = [p.strip() for p in location.split(",")]
+    if len(parts) >= 2:
+        candidate = parts[1].strip()
+        if candidate.upper() in _US_STATE_ABBRS:
+            return parts[0].strip(), candidate.upper()
+        return parts[0].strip(), None
+    return None, None
 
 
 def _current_week_start() -> date:
@@ -111,13 +146,18 @@ def run():
             # Embedding
             embedding = embed(description)
 
+            # Derive entry-level and city/state
+            location_str = posting.get("location", "")
+            entry_level = _is_entry_level(title, description)
+            city, state = _extract_city_state(location_str)
+
             # Build model instance
             job = JobPosting(
                 source=posting.get("source", "unknown"),
                 source_url=posting["source_url"],
                 company=company,
                 title=title,
-                location=posting.get("location", ""),
+                location=location_str,
                 remote=posting.get("remote", False),
                 description_raw=description,
                 description_embedding=embedding,
@@ -130,6 +170,9 @@ def run():
                 visa_sponsorship=extracted.get("visa_sponsorship"),
                 role_category=extracted.get("role_category", "ml_engineer"),
                 posted_at=_parse_date(posting.get("posted_at")),
+                is_entry_level=entry_level,
+                city=city,
+                state=state,
             )
             db.add(job)
             inserted += 1

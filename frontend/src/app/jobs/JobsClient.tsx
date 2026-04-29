@@ -35,6 +35,14 @@ const SORT_OPTIONS = [
   { value: 'salary_desc', label: 'Salary: High to Low' },
 ]
 
+const POSTED_WITHIN_OPTIONS = [
+  { value: '', label: 'Any time' },
+  { value: '4h', label: 'Last 4 hours' },
+  { value: '24h', label: 'Last 24 hours' },
+  { value: '7d', label: 'Last 7 days' },
+  { value: '30d', label: 'Last 30 days' },
+]
+
 const WORK_TYPE_OPTIONS = [
   { value: '', label: 'All Locations' },
   { value: 'remote', label: 'Remote' },
@@ -102,6 +110,9 @@ export default function JobsPageClient() {
   const [sort, setSort] = useState('newest')
   const [workType, setWorkType] = useState('')
   const [visaOnly, setVisaOnly] = useState(false)
+  const [entryLevel, setEntryLevel] = useState(false)
+  const [postedWithin, setPostedWithin] = useState('')
+  const [city, setCity] = useState('')
   const [page, setPage] = useState(1)
   const [allJobs, setAllJobs] = useState<any[]>([])
   const [hasMore, setHasMore] = useState(true)
@@ -117,6 +128,9 @@ export default function JobsPageClient() {
     seniority: seniorityParam,
     remote_only: workType === 'remote' ? true : undefined,
     visa_only: visaOnly || undefined,
+    entry_level: entryLevel || undefined,
+    posted_within: (postedWithin || undefined) as any,
+    city: city || undefined,
     sort: sort as any,
     page,
     limit: 20,
@@ -158,7 +172,8 @@ export default function JobsPageClient() {
 
   const resetFilters = useCallback(() => {
     setSearch(''); setRole(''); setLevel(''); setSort('newest')
-    setWorkType(''); setVisaOnly(false); setPage(1); setAllJobs([])
+    setWorkType(''); setVisaOnly(false); setEntryLevel(false)
+    setPostedWithin(''); setCity(''); setPage(1); setAllJobs([])
   }, [])
 
   const applyFilter = useCallback((updater: () => void) => {
@@ -167,7 +182,7 @@ export default function JobsPageClient() {
     setAllJobs([])
   }, [])
 
-  const hasFilters = !!(search || role || level || workType || visaOnly)
+  const hasFilters = !!(search || role || level || workType || visaOnly || entryLevel || postedWithin || city)
   const totalDisplay = allJobs.length > 0
     ? `${allJobs.length}+ roles`
     : isLoading ? 'Loading...' : '0 roles'
@@ -203,6 +218,29 @@ export default function JobsPageClient() {
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
           <Card glass className="mb-6 p-4">
             <div className="flex flex-col gap-3">
+              {/* Quick chips */}
+              <div className="flex flex-wrap gap-2">
+                {([
+                  { id: 'hot', label: '🔥 Hot 4h', active: postedWithin === '4h', action: () => setPostedWithin(v => v === '4h' ? '' : '4h') },
+                  { id: 'entry', label: '🎓 Entry-Level', active: entryLevel, action: () => setEntryLevel(v => !v) },
+                  { id: 'remote', label: '🌍 Remote', active: workType === 'remote', action: () => setWorkType(v => v === 'remote' ? '' : 'remote') },
+                  { id: 'visa', label: '✈️ Visa OK', active: visaOnly, action: () => setVisaOnly(v => !v) },
+                  { id: 'salary', label: '$$ Top Pay', active: sort === 'salary_desc', action: () => setSort(v => v === 'salary_desc' ? 'newest' : 'salary_desc') },
+                ] as const).map(chip => (
+                  <button
+                    key={chip.id}
+                    onClick={() => applyFilter(chip.action)}
+                    className={`px-3 py-1.5 rounded-full border text-xs font-medium transition-colors ${
+                      chip.active
+                        ? 'bg-primary-500/20 border-primary-500/50 text-primary-300'
+                        : 'bg-background border-foreground-muted/20 text-foreground-secondary hover:border-primary-500/30 hover:text-primary-300'
+                    }`}
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+
               {/* Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground-muted" />
@@ -220,40 +258,30 @@ export default function JobsPageClient() {
                 )}
               </div>
 
-              {/* Filter dropdowns */}
+              {/* Filter dropdowns row 1 */}
               <div className="flex flex-wrap gap-2 items-center">
-                <FilterSelect
-                  value={role}
-                  onChange={v => applyFilter(() => setRole(v))}
-                  options={ROLE_OPTIONS}
-                />
-                <FilterSelect
-                  value={level}
-                  onChange={v => applyFilter(() => setLevel(v))}
-                  options={LEVEL_OPTIONS}
-                />
-                <FilterSelect
-                  value={workType}
-                  onChange={v => applyFilter(() => setWorkType(v))}
-                  options={WORK_TYPE_OPTIONS}
-                />
-                <FilterSelect
-                  value={sort}
-                  onChange={v => applyFilter(() => setSort(v))}
-                  options={SORT_OPTIONS}
-                />
+                <FilterSelect value={role} onChange={v => applyFilter(() => setRole(v))} options={ROLE_OPTIONS} />
+                <FilterSelect value={level} onChange={v => applyFilter(() => setLevel(v))} options={LEVEL_OPTIONS} />
+                <FilterSelect value={workType} onChange={v => applyFilter(() => setWorkType(v))} options={WORK_TYPE_OPTIONS} />
+                <FilterSelect value={sort} onChange={v => applyFilter(() => setSort(v))} options={SORT_OPTIONS} />
+                <FilterSelect value={postedWithin} onChange={v => applyFilter(() => setPostedWithin(v))} options={POSTED_WITHIN_OPTIONS} />
 
-                {/* Visa toggle */}
-                <button
-                  onClick={() => applyFilter(() => setVisaOnly(v => !v))}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm transition-colors whitespace-nowrap ${
-                    visaOnly
-                      ? 'bg-green-500/20 border-green-500/40 text-green-300'
-                      : 'bg-background border-foreground-muted/20 text-foreground-secondary hover:border-foreground-muted/40'
-                  }`}
-                >
-                  Visa Sponsorship
-                </button>
+                {/* City search */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="City..."
+                    value={city}
+                    onChange={e => applyFilter(() => setCity(e.target.value))}
+                    className="pl-3 pr-7 py-2 rounded-lg border border-foreground-muted/20 text-sm focus:outline-none focus:border-primary-500/50 transition-colors min-w-[100px]"
+                    style={{ backgroundColor: '#1e293b', color: '#f8fafc' }}
+                  />
+                  {city && (
+                    <button onClick={() => applyFilter(() => setCity(''))} className="absolute right-2 top-1/2 -translate-y-1/2">
+                      <X className="w-3 h-3 text-foreground-muted" />
+                    </button>
+                  )}
+                </div>
 
                 {hasFilters && (
                   <button onClick={resetFilters} className="flex items-center gap-1 px-2 py-2 text-sm text-foreground-muted hover:text-foreground transition-colors">
