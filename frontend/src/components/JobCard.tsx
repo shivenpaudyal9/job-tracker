@@ -34,16 +34,16 @@ function CompanyLogo({ company, domain }: { company: string; domain?: string }) 
   if (err) {
     return (
       <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-600/30 to-accent-600/30 flex items-center justify-center text-sm font-bold text-primary-300 flex-shrink-0">
-        {company.charAt(0)}
+        {company.charAt(0).toUpperCase()}
       </div>
     )
   }
   return (
     <img
-      src={`https://logo.clearbit.com/${d}`}
+      src={`https://www.google.com/s2/favicons?domain=${d}&sz=64`}
       alt={company}
       onError={() => setErr(true)}
-      className="w-10 h-10 rounded-lg object-contain bg-white p-1 flex-shrink-0"
+      className="w-10 h-10 rounded-lg object-contain bg-white/5 p-1.5 flex-shrink-0"
     />
   )
 }
@@ -182,11 +182,16 @@ export function JobCard({ job, matchScore }: JobCardProps) {
           >
             Apply <ExternalLink className="w-3 h-3" />
           </a>
-          {job.posted_at && (
-            <span className="text-foreground-muted text-xs">
-              {Math.max(1, Math.round((Date.now() - new Date(job.posted_at).getTime()) / 86400000))}d ago
-            </span>
-          )}
+          {(job.scraped_at || job.posted_at) && (() => {
+            const ts = job.scraped_at || job.posted_at!
+            const diffMs = Date.now() - new Date(ts).getTime()
+            const diffH = Math.floor(diffMs / 3_600_000)
+            const diffD = Math.floor(diffMs / 86_400_000)
+            const label = diffH < 1 ? 'just now'
+              : diffH < 24 ? `${diffH}h ago`
+              : `${Math.max(1, diffD)}d ago`
+            return <span className="text-foreground-muted text-xs">{label}</span>
+          })()}
         </div>
       </div>
     </div>
