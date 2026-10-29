@@ -23,9 +23,12 @@ This evaluates routing behavior, not calibrated probabilities.
 """
 import argparse
 import json
+import sys
 from collections import defaultdict
 from pathlib import Path
 from types import SimpleNamespace
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.extractor import JobEmailExtractor
 from app.models import ApplicationStatus
