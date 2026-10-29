@@ -267,7 +267,7 @@ class EmailProcessor:
 
             else:
                 # Update existing application
-                application = self.db.query(Application).get(match_result.application_id)
+                application = self.db.get(Application, match_result.application_id)
                 if application:
                     self._update_application(application, extracted_data, extraction_date)
                     self._create_event(application, raw_email, extracted_data, extraction_date)
