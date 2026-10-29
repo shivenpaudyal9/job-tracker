@@ -29,7 +29,7 @@ PATTERNS = {
         r"\b(?:application|candidacy)\b.{0,45}\bunsuccessful\b",
     ],
     "offer": [
-        r"\b(?:pleased|delighted|excited) to offer you\b",
+        r"\b(?:pleased|delighted|excited) to offer you\b.{0,50}\b(?:position|role|job|employment)\b",
         r"\b(?:extend|extended|extending) (?:you )?an? (?:employment |job )?offer\b",
         r"\b(?:formal )?offer (?:of employment|letter)\b",
     ],
