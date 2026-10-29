@@ -19,6 +19,10 @@ PATTERNS = {
         r"\b(?:invited|invite|invitation)\b.{0,55}\b(?:coding|technical|programming)\b.{0,20}\b(?:assessment|challenge|evaluation|test)\b",
         r"\b(?:coding|technical|programming)\b.{0,24}\b(?:assessment|challenge|evaluation|exercise|test)\b.{0,30}\b(?:due|deadline|by (?:friday|monday|tuesday|wednesday|thursday|saturday|sunday))\b",
     ],
+    "interview_request": [
+        r"\\b(?:schedule|arrange|book|select|choose|pick)\\b.{0,50}\\b(?:interview|time slot|available time)\\b",
+        r"\\b(?:interview|recruiter call)\\b.{0,50}\\b(?:availability|select a time|pick a slot|scheduling)\\b",
+    ],
     "interview_scheduled": [
         r"\binterview\b.{0,45}\b(?:is scheduled|has been scheduled|confirmed|booked)\b",
         r"\b(?:confirmed|scheduled|booked)\b.{0,45}\binterview\b",
