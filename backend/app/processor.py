@@ -13,7 +13,7 @@ This is the main processing engine that ties everything together.
 """
 
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass
 import logging
 
@@ -43,7 +43,7 @@ class ProcessingResult:
     is_new_application: bool
     needs_manual_review: bool
     error: Optional[str]
-    confidence: float
+    confidence: Optional[float]
 
 
 class EmailProcessor:
@@ -220,7 +220,30 @@ class EmailProcessor:
                     confidence=match_result.confidence
                 )
 
-            elif match_result.is_new:
+            elif not match_result.is_new:
+                application = self.db.query(Application).filter(
+                    Application.id == match_result.application_id,
+                    Application.user_id == self.user_id,
+                ).first()
+                if application and self._unsafe_status_transition(
+                    application, extracted_data, extraction_date
+                ):
+                    match_result.should_review = True
+                    match_result.reason = "Status change is out of order or contradicts a terminal stage"
+                    self._create_manual_review(raw_email, extracted_data, match_result)
+                    raw_email.processed = True
+                    self.db.commit()
+                    return ProcessingResult(
+                        raw_email_id=raw_email.id,
+                        success=True,
+                        application_id=application.id,
+                        is_new_application=False,
+                        needs_manual_review=True,
+                        error=None,
+                        confidence=match_result.confidence,
+                    )
+
+            if match_result.is_new:
                 # Create new application
                 application = self._create_application(extracted_data, extraction_date)
                 self._create_event(application, raw_email, extracted_data, extraction_date)
@@ -244,7 +267,7 @@ class EmailProcessor:
 
             else:
                 # Update existing application
-                application = self.db.query(Application).get(match_result.application_id)
+                application = self.db.get(Application, match_result.application_id)
                 if application:
                     self._update_application(application, extracted_data, extraction_date)
                     self._create_event(application, raw_email, extracted_data, extraction_date)
@@ -291,6 +314,49 @@ class EmailProcessor:
                 error=str(e),
                 confidence=0.0
             )
+
+    @staticmethod
+    def _unsafe_status_transition(
+        application: Application, extracted: ExtractedData, email_date: datetime
+    ) -> bool:
+        """Protect current status from older or logically backward email events."""
+        old = application.current_status
+        new = extracted.status
+        if new == old:
+            return False
+        if application.status_updated_at:
+            # Graph timestamps can be timezone-aware while SQLite test records
+            # can be naive. Compare normalized UTC instants consistently.
+            def utc(value: datetime) -> datetime:
+                return (value.replace(tzinfo=timezone.utc) if value.tzinfo is None
+                        else value.astimezone(timezone.utc))
+            if utc(email_date) < utc(application.status_updated_at):
+                return True
+        if old in {
+            ApplicationStatus.REJECTED,
+            ApplicationStatus.OFFER_ACCEPTED,
+            ApplicationStatus.WITHDRAWN,
+        }:
+            return True
+        if new == ApplicationStatus.APPLIED_RECEIVED and old != new:
+            return True
+        if new == ApplicationStatus.OTHER_UPDATE:
+            return True
+        # A later email shouldn't regress a stage just because it arrived later.
+        stage = {
+            ApplicationStatus.APPLIED_RECEIVED: 0,
+            ApplicationStatus.IN_REVIEW: 1,
+            ApplicationStatus.NEXT_STEP_ASSESSMENT: 2,
+            ApplicationStatus.NEXT_STEP_SCHEDULING: 3,
+            ApplicationStatus.INTERVIEW_SCHEDULED: 4,
+            ApplicationStatus.INTERVIEW_COMPLETED: 5,
+            ApplicationStatus.OFFER_EXTENDED: 6,
+            ApplicationStatus.OFFER_ACCEPTED: 7,
+        }
+        if new not in {ApplicationStatus.REJECTED, ApplicationStatus.OFFER_EXTENDED}:
+            if old in stage and new in stage and stage[new] < stage[old]:
+                return True
+        return False
 
     def _create_application(
         self,

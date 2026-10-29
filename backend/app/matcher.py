@@ -29,7 +29,7 @@ class MatchResult:
     """Result of application matching"""
     application_id: Optional[int]
     match_type: str  # "exact", "fuzzy", "domain", "subject", "no_match"
-    confidence: float  # 0.0-1.0
+    confidence: Optional[float]  # only calibrated values should be treated as probability
     is_new: bool  # True if should create new application
     should_review: bool  # True if needs manual review
     reason: str  # Explanation of match/no-match
@@ -84,19 +84,19 @@ class ApplicationMatcher:
         if company and job_title:
             result = self._match_exact(company, job_title)
             if result:
-                return result
+                return self._finalize_match(extracted_data, result)
 
         # Strategy 2: Fuzzy match
         if company and job_title:
             result = self._match_fuzzy(company, job_title)
             if result:
-                return result
+                return self._finalize_match(extracted_data, result)
 
         # Strategy 3: Domain + time window
         if company:
             result = self._match_by_domain_and_time(company, email_date)
             if result:
-                return result
+                return self._finalize_match(extracted_data, result)
 
         # Strategy 4: Subject similarity (weakest)
         if extracted_data.job_title:
@@ -105,10 +105,54 @@ class ApplicationMatcher:
                 email_date
             )
             if result:
-                return result
+                return self._finalize_match(extracted_data, result)
 
         # No match found - decide: create new or manual review
-        return self._handle_no_match(extracted_data)
+        return self._finalize_match(extracted_data, self._handle_no_match(extracted_data))
+
+
+    def _finalize_match(self, extracted_data: ExtractedData, match: MatchResult) -> MatchResult:
+        """Decide automation only after BOTH evidence and application identity check.
+
+        LLM-only matching is never accepted on fuzzy/subject/domain signals.
+        A verified application receipt may create a new record; a later-stage
+        invitation needs an exact existing application or human confirmation.
+        """
+        if not extracted_data.extraction_method.startswith("llm_"):
+            if extracted_data.requires_manual_review:
+                match.should_review = True
+                match.is_new = False
+                match.reason = "Ambiguous recruiting email requires confirmation"
+            return match
+
+        verified = (
+            extracted_data.verification_score is not None
+            and extracted_data.verification_score >= 95
+            and not extracted_data.requires_manual_review
+        )
+        safe_existing = match.match_type == "exact" and match.application_id is not None
+        safe_new = (
+            match.match_type == "no_match"
+            and extracted_data.status == ApplicationStatus.APPLIED_RECEIVED
+            and bool(extracted_data.company_name and extracted_data.job_title)
+        )
+        if verified and (safe_existing or safe_new):
+            match.should_review = False
+            match.is_new = safe_new
+            match.confidence = None  # LLM confidence is not calibrated
+            match.reason = "Verified source evidence and exact application identity" if safe_existing else "Verified new application confirmation"
+            return match
+
+        match.should_review = True
+        match.is_new = False
+        match.confidence = None
+        match.reason = (
+            extracted_data.verification_reason or
+            "Need stronger status evidence or exact application match"
+        )
+        if verified and not (safe_existing or safe_new):
+            match.reason = "LLM extraction supported, but application identity is not exact"
+        return match
 
     def _match_exact(self, company: str, job_title: str) -> Optional[MatchResult]:
         """
@@ -285,7 +329,11 @@ class ApplicationMatcher:
         - High confidence extraction → create new application
         - Low confidence → route to manual review
         """
-        if extracted_data.overall_confidence >= self.LOW_CONFIDENCE_THRESHOLD:
+        if (extracted_data.overall_confidence or 0.0) >= self.LOW_CONFIDENCE_THRESHOLD or (
+            extracted_data.extraction_method.startswith("llm_")
+            and extracted_data.verification_score is not None
+            and extracted_data.verification_score >= 95
+        ):
             # Good extraction, safe to create new application
             return MatchResult(
                 application_id=None,
@@ -303,7 +351,7 @@ class ApplicationMatcher:
                 confidence=extracted_data.overall_confidence,
                 is_new=False,
                 should_review=True,
-                reason=f"Low extraction confidence ({extracted_data.overall_confidence:.2f}) - manual review required"
+                reason="Insufficient extraction evidence - manual review required"
             )
 
     def _string_similarity(self, str1: str, str2: str) -> float:

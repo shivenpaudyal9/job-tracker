@@ -78,6 +78,7 @@ class ForwardedEmailUnwrapper:
     # Signature patterns to strip
     SIGNATURE_PATTERNS = [
         r'\n--\s*\n',  # Standard email signature delimiter
+        r'\nBest wishes[^\n]*\n',
         r'\nBest regards,?\n',
         r'\nThanks,?\n',
         r'\nRegards,?\n',
@@ -91,6 +92,36 @@ class ForwardedEmailUnwrapper:
         r'On .+? wrote:',
         r'>\s*>',  # Multiple levels of quoting
     ]
+
+    @staticmethod
+    def _forward_start(text: str) -> Optional[int]:
+        """Index of forwarded content, keeping Outlook's original header block."""
+        for pattern in (
+            r'---------- Forwarded message ---------',
+            r'Begin forwarded message:',
+            r'Forwarded message',
+            r'_{20,}',
+        ):
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                return match.end()
+
+        # Outlook forwards can contain a plain multi-line header block with no
+        # explicit 'forwarded message' marker at all.
+        header = re.search(
+            r'(?im)^\s*From:[^\n]+\n\s*(?:Sent:|Date:)[^\n]+'
+            r'\n\s*To:[^\n]+\n\s*Subject:[^\n]+',
+            text,
+        )
+        return header.start() if header else None
+
+    @staticmethod
+    def _join_wrapped_sender_header(text: str) -> str:
+        """HTML-to-text parsing may separate display name and <email> by newline."""
+        return re.sub(
+            r'(?im)^(\s*From:[^\n]+)\n\s*(<[\w.+%-]+@[\w.-]+>)',
+            r'\1 \2', text,
+        )
 
     def unwrap(self, body_text: Optional[str], body_html: Optional[str]) -> UnwrappedEmail:
         """
@@ -133,19 +164,15 @@ class ForwardedEmailUnwrapper:
             soup = BeautifulSoup(html, 'html.parser')
             text = soup.get_text('\n')
 
-            # Try to detect forward block
-            forward_match = None
-            for pattern in self.GMAIL_FORWARD_MARKERS + self.OUTLOOK_FORWARD_MARKERS:
-                match = re.search(pattern, text, re.IGNORECASE)
-                if match:
-                    forward_match = match
-                    break
-
-            if not forward_match:
-                return UnwrappedEmail(None, None, None, None, None, html, 0.0, "no_html_forward_detected")
-
-            # Extract text after forward marker
-            forwarded_content = text[forward_match.end():]
+            # Detect marker or Outlook's header-only forward format.
+            text = self._join_wrapped_sender_header(text)
+            forward_start = self._forward_start(text)
+            if forward_start is None:
+                return UnwrappedEmail(
+                    None, None, None, None, soup.get_text(" ", strip=True),
+                    html, 1.0, "no_html_forward_detected"
+                )
+            forwarded_content = text[forward_start:]
 
             # Extract headers
             original_from = self._extract_header(forwarded_content, 'from')
@@ -178,19 +205,13 @@ class ForwardedEmailUnwrapper:
 
     def _unwrap_text(self, text: str) -> UnwrappedEmail:
         """Unwrap forwarded email from plain text body"""
-        # Detect forward marker
-        forward_match = None
-        for pattern in self.GMAIL_FORWARD_MARKERS + self.OUTLOOK_FORWARD_MARKERS:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                forward_match = match
-                break
-
-        if not forward_match:
-            return UnwrappedEmail(None, None, None, None, text, None, 0.0, "no_text_forward_detected")
-
-        # Extract forwarded content
-        forwarded_content = text[forward_match.end():]
+        forward_start = self._forward_start(text)
+        if forward_start is None:
+            return UnwrappedEmail(
+                None, None, None, None, text, None, 1.0,
+                "no_text_forward_detected"
+            )
+        forwarded_content = text[forward_start:]
 
         # Extract headers
         original_from = self._extract_header(forwarded_content, 'from')
@@ -220,6 +241,21 @@ class ForwardedEmailUnwrapper:
 
     def _extract_header(self, content: str, header_type: str) -> Optional[str]:
         """Extract a specific header from forwarded content"""
+        if header_type == "from":
+            # HTML forwards may split "From: Display Name <email>" over
+            # several lines. Capture everything until the next mail header.
+            match = re.search(
+                r'(?ims)^\s*From:\s*(.*?)\s*(?=^\s*(?:Date|Sent|To|Subject):|\Z)',
+                content,
+            )
+            if match:
+                value = " ".join(match.group(1).split())
+                value = re.sub(
+                    r'</?(?:b|i|strong|em|span|div|br|p|font)(?:\s[^>]*)?>',
+                    '', value, flags=re.IGNORECASE
+                )
+                if value:
+                    return value
         patterns = self.HEADER_PATTERNS.get(header_type, [])
 
         for pattern in patterns:
@@ -227,7 +263,12 @@ class ForwardedEmailUnwrapper:
             if match:
                 value = match.group(1).strip()
                 # Clean HTML tags if present
-                value = re.sub(r'<[^>]+>', '', value)
+                # Preserve <someone@example.com> in From headers; those are
+                # addresses, not HTML tags.
+                value = re.sub(
+                    r'</?(?:b|i|strong|em|span|div|br|p|font)(?:\s[^>]*)?>',
+                    '', value, flags=re.IGNORECASE
+                )
                 return value if value else None
 
         return None
@@ -292,7 +333,13 @@ class ForwardedEmailUnwrapper:
             except:
                 continue
 
-        return None
+        # Recruiter forwards often use 'Mon, Jan 15, 2024 at 10:30 AM',
+        # which strptime patterns above don't cover.
+        try:
+            from dateutil import parser
+            return parser.parse(re.sub(r'\bat\b', '', date_str, flags=re.IGNORECASE))
+        except (ValueError, TypeError, OverflowError):
+            return None
 
     def _calculate_confidence(
         self,
