@@ -82,11 +82,11 @@ class ApplicationMatcher:
         if getattr(extracted_data, "requires_manual_review", False):
             return MatchResult(
                 application_id=None,
-                match_type="llm_status_disagreement",
-                confidence=extracted_data.overall_confidence,
+                match_type="llm_requires_review",
+                confidence=0.0,  # No calibrated LLM confidence available
                 is_new=False,
                 should_review=True,
-                reason="LLM and rule-based statuses disagree; verify the source email",
+                reason="LLM-assisted extraction needs confirmation against the source email",
             )
 
         company = extracted_data.company_name
