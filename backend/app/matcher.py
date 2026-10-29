@@ -351,7 +351,7 @@ class ApplicationMatcher:
                 confidence=extracted_data.overall_confidence,
                 is_new=False,
                 should_review=True,
-                reason=f"Low extraction confidence ({extracted_data.overall_confidence:.2f}) - manual review required"
+                reason="Insufficient extraction evidence - manual review required"
             )
 
     def _string_similarity(self, str1: str, str2: str) -> float:
