@@ -57,12 +57,12 @@ class ExtractedData:
     # Confidence scores (0.0-1.0)
     company_confidence: float = 0.0
     job_title_confidence: float = 0.0
-    overall_confidence: float = 0.0
+    overall_confidence: Optional[float] = 0.0
 
     # Metadata
     extraction_method: str = "rule_based"  # "rule_based" or "llm_fallback"
-    parser_version: str = "1.1.0"
-    requires_manual_review: bool = False  # Conflicting LLM status must be verified
+    parser_version: str = "1.2.0"
+    requires_manual_review: bool = False  # LLM-only updates must be verified
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON storage"""
@@ -167,15 +167,10 @@ class JobEmailExtractor:
         # If confidence too low, try LLM fallback (use LLM more aggressively)
         if result.overall_confidence < 0.85 and self.llm_client:
             llm_result = self._extract_llm_fallback(subject, body, from_address)
-            if llm_result and llm_result.overall_confidence > result.overall_confidence:
-                # A disagreement about application status is never auto-applied.
-                llm_result.requires_manual_review = (
-                    llm_result.status != result.status
-                    or llm_result.status in {
-                        ApplicationStatus.REJECTED,
-                        ApplicationStatus.OFFER_EXTENDED,
-                    }
-                )
+            if llm_result:
+                # Valid JSON with a supporting quote is not measured accuracy.
+                # Keep the extraction as a suggestion until a user confirms it.
+                llm_result.requires_manual_review = True
                 result = llm_result
 
         return result
@@ -827,10 +822,10 @@ Return null for fields you truly cannot determine. Never invent quotes: every ev
                 action_required=validated["action_required"],
                 action_description=validated["action_description"],
                 extraction_method="llm_groq_grounded",
-                company_confidence=0.85,
-                job_title_confidence=0.85,
-                overall_confidence=validated["evidence_quality"],
-                parser_version="1.1.0",
+                company_confidence=0.0,  # No calibrated field-level estimate available
+                job_title_confidence=0.0,
+                overall_confidence=None,  # Unknown, not an invented 90% probability
+                parser_version="1.2.0",
             )
 
         except Exception as e:
