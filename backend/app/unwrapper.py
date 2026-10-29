@@ -78,6 +78,7 @@ class ForwardedEmailUnwrapper:
     # Signature patterns to strip
     SIGNATURE_PATTERNS = [
         r'\n--\s*\n',  # Standard email signature delimiter
+        r'\nBest wishes[^\n]*\n',
         r'\nBest regards,?\n',
         r'\nThanks,?\n',
         r'\nRegards,?\n',
@@ -240,6 +241,21 @@ class ForwardedEmailUnwrapper:
 
     def _extract_header(self, content: str, header_type: str) -> Optional[str]:
         """Extract a specific header from forwarded content"""
+        if header_type == "from":
+            # HTML forwards may split "From: Display Name <email>" over
+            # several lines. Capture everything until the next mail header.
+            match = re.search(
+                r'(?ims)^\s*From:\s*(.*?)\s*(?=^\s*(?:Date|Sent|To|Subject):|\Z)',
+                content,
+            )
+            if match:
+                value = " ".join(match.group(1).split())
+                value = re.sub(
+                    r'</?(?:b|i|strong|em|span|div|br|p|font)(?:\s[^>]*)?>',
+                    '', value, flags=re.IGNORECASE
+                )
+                if value:
+                    return value
         patterns = self.HEADER_PATTERNS.get(header_type, [])
 
         for pattern in patterns:
