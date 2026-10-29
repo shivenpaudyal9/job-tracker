@@ -781,7 +781,7 @@ Return JSON in this exact format:
     "company_evidence": "verbatim email quote containing company name, or null",
     "job_title": "Job Title/Position or null if not found",
     "job_title_evidence": "verbatim email quote containing job title, or null",
-    "status": "one of: applied, received, interview_scheduled, assessment, rejected, offer, other",
+    "status": "one of: applied, received, interview_request, interview_scheduled, assessment, rejected, offer",
     "status_evidence": "verbatim email quote supporting the proposed status, or null",
     "action_required": true or false,
     "action_description": "description of action needed or null",
@@ -834,6 +834,7 @@ Return null for fields you truly cannot determine. Never invent quotes: every ev
                 'received': ApplicationStatus.APPLIED_RECEIVED,
                 'interview_scheduled': ApplicationStatus.INTERVIEW_SCHEDULED,
                 'assessment': ApplicationStatus.NEXT_STEP_ASSESSMENT,
+                'interview_request': ApplicationStatus.NEXT_STEP_SCHEDULING,
                 'rejected': ApplicationStatus.REJECTED,
                 'offer': ApplicationStatus.OFFER_EXTENDED,
             }
@@ -854,12 +855,14 @@ Return null for fields you truly cannot determine. Never invent quotes: every ev
                 "applied": EmailType.APPLICATION_CONFIRMATION,
                 "received": EmailType.APPLICATION_CONFIRMATION,
                 "assessment": EmailType.ASSESSMENT_INVITE,
+                "interview_request": EmailType.INTERVIEW_REQUEST,
                 "interview_scheduled": EmailType.INTERVIEW_CONFIRMATION,
                 "rejected": EmailType.REJECTION,
                 "offer": EmailType.OFFER,
             }
             action_type_map = {
                 "assessment": ActionType.COMPLETE_ASSESSMENT,
+                "interview_request": ActionType.SCHEDULE_INTERVIEW,
                 "interview_scheduled": ActionType.SCHEDULE_INTERVIEW,
                 "offer": ActionType.ACCEPT_OFFER,
             }
