@@ -77,6 +77,18 @@ class ApplicationMatcher:
         Returns:
             MatchResult with application_id and confidence
         """
+        # Prevent a model-generated status change from silently overwriting
+        # an application when the deterministic parser disagrees.
+        if getattr(extracted_data, "requires_manual_review", False):
+            return MatchResult(
+                application_id=None,
+                match_type="llm_status_disagreement",
+                confidence=extracted_data.overall_confidence,
+                is_new=False,
+                should_review=True,
+                reason="LLM and rule-based statuses disagree; verify the source email",
+            )
+
         company = extracted_data.company_name
         job_title = extracted_data.job_title
 
