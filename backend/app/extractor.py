@@ -169,7 +169,13 @@ class JobEmailExtractor:
             llm_result = self._extract_llm_fallback(subject, body, from_address)
             if llm_result and llm_result.overall_confidence > result.overall_confidence:
                 # A disagreement about application status is never auto-applied.
-                llm_result.requires_manual_review = (llm_result.status != result.status)
+                llm_result.requires_manual_review = (
+                    llm_result.status != result.status
+                    or llm_result.status in {
+                        ApplicationStatus.REJECTED,
+                        ApplicationStatus.OFFER_EXTENDED,
+                    }
+                )
                 result = llm_result
 
         return result
