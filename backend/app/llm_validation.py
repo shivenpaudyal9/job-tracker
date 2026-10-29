@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 
 VALID_STATUSES = {
     "applied", "received", "interview_scheduled",
-    "assessment", "rejected", "offer",
+    "assessment", "interview_request", "rejected", "offer",
 }
 
 
