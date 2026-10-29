@@ -13,7 +13,7 @@ This is the main processing engine that ties everything together.
 """
 
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass
 import logging
 
@@ -324,8 +324,14 @@ class EmailProcessor:
         new = extracted.status
         if new == old:
             return False
-        if application.status_updated_at and email_date < application.status_updated_at:
-            return True
+        if application.status_updated_at:
+            # Graph timestamps can be timezone-aware while SQLite test records
+            # can be naive. Compare normalized UTC instants consistently.
+            def utc(value: datetime) -> datetime:
+                return (value.replace(tzinfo=timezone.utc) if value.tzinfo is None
+                        else value.astimezone(timezone.utc))
+            if utc(email_date) < utc(application.status_updated_at):
+                return True
         if old in {
             ApplicationStatus.REJECTED,
             ApplicationStatus.OFFER_ACCEPTED,
@@ -336,6 +342,20 @@ class EmailProcessor:
             return True
         if new == ApplicationStatus.OTHER_UPDATE:
             return True
+        # A later email shouldn't regress a stage just because it arrived later.
+        stage = {
+            ApplicationStatus.APPLIED_RECEIVED: 0,
+            ApplicationStatus.IN_REVIEW: 1,
+            ApplicationStatus.NEXT_STEP_ASSESSMENT: 2,
+            ApplicationStatus.NEXT_STEP_SCHEDULING: 3,
+            ApplicationStatus.INTERVIEW_SCHEDULED: 4,
+            ApplicationStatus.INTERVIEW_COMPLETED: 5,
+            ApplicationStatus.OFFER_EXTENDED: 6,
+            ApplicationStatus.OFFER_ACCEPTED: 7,
+        }
+        if new not in {ApplicationStatus.REJECTED, ApplicationStatus.OFFER_EXTENDED}:
+            if old in stage and new in stage and stage[new] < stage[old]:
+                return True
         return False
 
     def _create_application(
