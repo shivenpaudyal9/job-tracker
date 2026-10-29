@@ -70,15 +70,37 @@ def test_rejects_unsupported_action():
     assert validate_llm_payload(payload, SUBJECT, BODY, SENDER) is None
 
 
-def test_grounded_output_has_quality_score_not_fixed_llm_confidence():
+def test_llm_output_never_gets_fabricated_probability():
     payload = good_payload()
-    a = validate_llm_payload(payload, SUBJECT, BODY, SENDER)
-    assert a is not None and 0 < a["evidence_quality"] <= 1
-    payload["action_required"] = False
-    payload["action_description"] = None
-    payload["action_evidence"] = None
-    b = validate_llm_payload(payload, SUBJECT, BODY, SENDER)
-    assert b is not None and b["evidence_quality"] < a["evidence_quality"]
+    extraction = JobEmailExtractor(llm_client=FakeGroq(payload)).extract(
+        SUBJECT, BODY, SENDER, datetime(2026, 10, 29)
+    )
+    assert extraction.extraction_method == "llm_groq_grounded"
+    assert extraction.overall_confidence is None
+    assert extraction.requires_manual_review is True
+
+
+def test_valid_llm_suggestion_is_reviewed_even_when_rules_agree():
+    subject = "Amazon: Complete the assessment"
+    body = "Please complete the assessment for the Software Engineer position at Amazon."
+    payload = {
+        "company_name": "Amazon",
+        "company_evidence": "at Amazon",
+        "job_title": "Software Engineer",
+        "job_title_evidence": "Software Engineer position",
+        "status": "assessment",
+        "status_evidence": "Please complete the assessment",
+        "action_required": True,
+        "action_description": "Complete assessment",
+        "action_evidence": "complete the assessment",
+        "is_job_related": True,
+    }
+    extraction = JobEmailExtractor(llm_client=FakeGroq(payload)).extract(
+        subject, body, SENDER, datetime(2026, 10, 29)
+    )
+    if extraction.extraction_method == "llm_groq_grounded":
+        assert extraction.requires_manual_review is True
+
 
 
 def test_status_disagreement_routes_to_review_before_database_match():
@@ -89,7 +111,7 @@ def test_status_disagreement_routes_to_review_before_database_match():
     matcher = ApplicationMatcher(db=None, user_id=1)
     matched = matcher.match(result, datetime(2026, 10, 29))
     assert matched.should_review is True
-    assert matched.match_type == "llm_status_disagreement"
+    assert matched.match_type == "llm_requires_review"
 
 
 def test_invalid_llm_response_keeps_rule_based_result():
