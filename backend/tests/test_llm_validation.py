@@ -303,3 +303,33 @@ def test_unproven_offer_phrase_not_auto_accepted():
         "We have something to offer", "other",
     )
     assert not auto
+
+
+def test_interview_scheduling_request_auto_updates_exact_match(db):
+    app = app_row(db)
+    body = "Please schedule an interview for the Software Engineer role at Amazon."
+    payload = {
+        "company_name": "Amazon",
+        "company_evidence": "role at Amazon",
+        "job_title": "Software Engineer",
+        "job_title_evidence": "Software Engineer role",
+        "status": "interview_request",
+        "status_evidence": "Please schedule an interview",
+        "action_required": True,
+        "action_description": "Schedule interview",
+        "action_evidence": "Please schedule an interview",
+        "is_job_related": True,
+    }
+    result = process(db, payload, body=body, subject="Amazon Software Engineer interview invitation")
+    db.refresh(app)
+    assert result.success and not result.needs_manual_review, result.error
+    assert app.current_status == ApplicationStatus.NEXT_STEP_SCHEDULING
+
+
+def test_stage_regression_requires_review_even_for_newer_email(db):
+    app = app_row(db, status=ApplicationStatus.INTERVIEW_SCHEDULED)
+    result = process(db, good_payload(), when=TODAY)
+    db.refresh(app)
+    assert result.success and result.needs_manual_review, result.error
+    assert app.current_status == ApplicationStatus.INTERVIEW_SCHEDULED
+    assert db.query(ManualReview).count() == 1
