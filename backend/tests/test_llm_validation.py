@@ -99,3 +99,27 @@ def test_invalid_llm_response_keeps_rule_based_result():
     result = extractor.extract(SUBJECT, BODY, SENDER, datetime(2026, 10, 29))
     assert result.extraction_method == "rule_based"
     assert result.requires_manual_review is False
+
+def test_llm_rejection_needs_review_even_when_rules_agree():
+    subject = "Regarding your application"
+    body = (
+        "We regret to inform you that Amazon is not moving forward "
+        "with your Software Engineer application."
+    )
+    payload = {
+        "company_name": "Amazon",
+        "company_evidence": "Amazon is not moving forward",
+        "job_title": "Software Engineer",
+        "job_title_evidence": "Software Engineer application",
+        "status": "rejected",
+        "status_evidence": "regret to inform you that Amazon is not moving forward",
+        "action_required": False,
+        "action_description": None,
+        "action_evidence": None,
+        "is_job_related": True,
+    }
+    result = JobEmailExtractor(llm_client=FakeGroq(payload)).extract(
+        subject, body, SENDER, datetime(2026, 10, 29)
+    )
+    if result.extraction_method.startswith("llm"):
+        assert result.requires_manual_review
