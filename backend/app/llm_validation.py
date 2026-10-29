@@ -62,19 +62,10 @@ def validate_llm_payload(
     if action_required and (not action_description or not _supported(action_quote, source)):
         return None
 
-    # Evidence-completeness score for choosing between parser results.
-    # NOT a confidence interval or probability of a correct classification.
-    evidence_quality = 0.80
-    if action_required and _supported(action_quote, source):
-        evidence_quality += 0.10
-    if _normalize(company) in _normalize(from_address or ""):
-        evidence_quality += 0.10
-
     return {
         "company_name": company,
         "job_title": title,
         "status": status,
         "action_required": action_required,
         "action_description": action_description if action_required else None,
-        "evidence_quality": round(evidence_quality, 2),
     }
