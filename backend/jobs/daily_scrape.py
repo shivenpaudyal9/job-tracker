@@ -1,6 +1,6 @@
 """
 Daily job scrape pipeline. Entry point for the GitHub Actions cron job.
-Schedule: 0 6 * * * (6am UTC daily)
+Schedule: every 4 hours via GitHub Actions
 
 Steps:
   1. Run all scrapers
@@ -32,6 +32,7 @@ logger = logging.getLogger("daily_scrape")
 from app.database import SessionLocal
 from app.jmi_models import JMIBase, JobPosting, SkillTrend
 from app.database import engine
+from app.job_freshness import parse_published_at
 
 JMIBase.metadata.create_all(bind=engine)
 
@@ -169,7 +170,7 @@ def run():
                 salary_currency=extracted.get("salary_currency", "USD"),
                 visa_sponsorship=extracted.get("visa_sponsorship"),
                 role_category=extracted.get("role_category", "ml_engineer"),
-                posted_at=_parse_date(posting.get("posted_at")),
+                posted_at=parse_published_at(posting.get("posted_at")),
                 is_entry_level=entry_level,
                 city=city,
                 state=state,
@@ -217,15 +218,8 @@ def run():
 
 
 def _parse_date(val):
-    if not val:
-        return None
-    if isinstance(val, datetime):
-        return val
-    try:
-        from dateutil import parser as dp
-        return dp.parse(str(val))
-    except Exception:
-        return None
+    """Backward-compatible alias for normalized UTC source publication dates."""
+    return parse_published_at(val)
 
 
 if __name__ == "__main__":
