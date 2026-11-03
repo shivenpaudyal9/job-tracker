@@ -1,7 +1,7 @@
 """
 Public JMI (Job Market Intelligence) API.
 All endpoints are unauthenticated and rate-limited via slowapi.
-Demo data fills gaps when the real scraped dataset is below 200 jobs.
+Demo data is explicitly labeled and shown only when no real jobs exist.
 """
 import hashlib
 import json
@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.jmi_models import JobPosting, SkillTrend, WeeklyReport, ResumeMatch, PGVECTOR_AVAILABLE
 from app.demo_loader import get_demo_jobs, total_demo_count
+from app.job_freshness import apply_published_window
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["JMI Public"])
@@ -68,10 +69,10 @@ def _data_source_label(real_count: int, last_scrape) -> dict:
             h = int(delta.total_seconds() // 3600)
             m = int((delta.total_seconds() % 3600) // 60)
             if h == 0:
-                ago = f" — scraped {m}m ago"
+                ago = f" — newest indexed {m}m ago"
             elif h < 48:
-                ago = f" — scraped {h}h ago"
-        return {"data_source": "live", "label": f"Live data{ago}"}
+                ago = f" — newest indexed {h}h ago"
+        return {"data_source": "live", "label": f"Indexed job listings{ago}"}
     return {"data_source": "demo", "label": "Sample data — scraper runs every 4h"}
 
 
@@ -84,15 +85,15 @@ def public_stats(request: Request, db: Session = Depends(get_db)):
         now = datetime.utcnow()
         jobs_last_4h = (
             db.query(func.count(JobPosting.id))
-            .filter(JobPosting.scraped_at >= now - timedelta(hours=4)).scalar() or 0
+            .filter(JobPosting.posted_at >= now - timedelta(hours=4), JobPosting.posted_at <= now).scalar() or 0
         )
         jobs_last_24h = (
             db.query(func.count(JobPosting.id))
-            .filter(JobPosting.scraped_at >= now - timedelta(hours=24)).scalar() or 0
+            .filter(JobPosting.posted_at >= now - timedelta(hours=24), JobPosting.posted_at <= now).scalar() or 0
         )
         jobs_this_week = (
             db.query(func.count(JobPosting.id))
-            .filter(JobPosting.scraped_at >= now - timedelta(days=7)).scalar() or 0
+            .filter(JobPosting.posted_at >= now - timedelta(days=7), JobPosting.posted_at <= now).scalar() or 0
         )
         companies_real = db.query(func.count(func.distinct(JobPosting.company))).scalar() or 0
         last_row = db.query(JobPosting.scraped_at).order_by(desc(JobPosting.scraped_at)).first()
@@ -101,7 +102,7 @@ def public_stats(request: Request, db: Session = Depends(get_db)):
         real_count = jobs_last_4h = jobs_last_24h = jobs_this_week = companies_real = 0
         last_scrape = None
 
-    companies_total = max(companies_real, 40)
+    companies_total = companies_real if real_count else 40
 
     return {
         "total_jobs_scraped": real_count if real_count > 0 else total_demo_count(),
@@ -189,7 +190,7 @@ def recent_jobs(
     db: Session = Depends(get_db),
 ):
     try:
-        q = db.query(JobPosting).order_by(desc(JobPosting.scraped_at))
+        q = db.query(JobPosting).order_by(desc(JobPosting.posted_at).nullslast(), desc(JobPosting.scraped_at))
         if role:
             q = q.filter(JobPosting.role_category == role)
         real_jobs = [_job_row_to_dict(j) for j in q.limit(limit).all()]
@@ -255,9 +256,8 @@ def list_jobs(
                 q = q.filter(JobPosting.is_entry_level == True)
             except Exception:
                 pass
-        if posted_within and posted_within != "all" and posted_within in _POSTED_WITHIN_HOURS:
-            cutoff = datetime.utcnow() - timedelta(hours=_POSTED_WITHIN_HOURS[posted_within])
-            q = q.filter(JobPosting.scraped_at >= cutoff)
+        # Publication time, not the moment our crawler indexed the listing.
+        q = apply_published_window(q, JobPosting, posted_within)
         if city:
             try:
                 q = q.filter(or_(
@@ -270,7 +270,7 @@ def list_jobs(
         if sort == "salary_desc":
             q = q.order_by(desc(JobPosting.salary_max).nullslast(), desc(JobPosting.scraped_at))
         else:
-            q = q.order_by(desc(JobPosting.scraped_at))
+            q = q.order_by(desc(JobPosting.posted_at).nullslast(), desc(JobPosting.scraped_at))
 
         real_total = q.count()
         real_jobs = [_job_row_to_dict(j) for j in q.offset(offset).limit(limit).all()]
@@ -279,12 +279,12 @@ def list_jobs(
         last_row = db.query(JobPosting.scraped_at).order_by(desc(JobPosting.scraped_at)).first()
         last_scrape = last_row[0] if last_row else None
     except Exception as e:
-        logger.warning("DB query failed in list_jobs: %s", e)
-        real_jobs, real_total, total_real_in_db, last_scrape = [], 0, 0, None
+        logger.exception("DB query failed in list_jobs")
+        raise HTTPException(status_code=503, detail="Job listings temporarily unavailable") from e
 
     # Use demo ONLY when the database is genuinely empty (zero real jobs ever scraped).
     # Time-filtered views (4h/24h/7d) always show the real empty state — never pad with demo.
-    is_time_filtered = bool(posted_within and posted_within not in ("all", "30d"))
+    is_time_filtered = bool(posted_within and posted_within != "all")
     use_demo = (total_real_in_db == 0 and not is_time_filtered)
 
     if use_demo:
