@@ -200,6 +200,36 @@ class EmailProcessor:
                     confidence=extracted_data.overall_confidence
                 )
 
+            # Relevance is decided before application matching. Neither an unrelated
+            # message nor a disagreement may silently create/update an application.
+            if extracted_data.is_job_related is False:
+                raw_email.processed = True
+                raw_email.processed_at = datetime.utcnow()
+                self.db.commit()
+                return ProcessingResult(
+                    raw_email_id=raw_email.id, success=True,
+                    application_id=None, is_new_application=False,
+                    needs_manual_review=False, error=None, confidence=0.0,
+                )
+
+            if extracted_data.needs_manual_review:
+                conflict = MatchResult(
+                    application_id=None, match_type="relevance_conflict",
+                    confidence=extracted_data.overall_confidence,
+                    is_new=False, should_review=True,
+                    reason="Rule-based and LLM results disagree on email relevance",
+                )
+                self._create_manual_review(raw_email, extracted_data, conflict)
+                raw_email.processed = True
+                raw_email.processed_at = datetime.utcnow()
+                self.db.commit()
+                return ProcessingResult(
+                    raw_email_id=raw_email.id, success=True,
+                    application_id=None, is_new_application=False,
+                    needs_manual_review=True, error=None,
+                    confidence=extracted_data.overall_confidence,
+                )
+
             # Step 5: Match to existing application
             match_result = self.matcher.match(extracted_data, extraction_date)
 
