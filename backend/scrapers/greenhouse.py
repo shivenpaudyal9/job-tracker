@@ -94,7 +94,7 @@ def scrape(companies: list[str] = COMPANIES) -> list[dict]:
                     "location": location,
                     "remote": remote,
                     "description_raw": content,
-                    "posted_at": job.get("updated_at"),
+                    "posted_at": job.get("first_published") or job.get("published_at"),  # updated_at is NOT publication time
                 })
                 count += 1
 
