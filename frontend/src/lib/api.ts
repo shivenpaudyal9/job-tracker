@@ -302,6 +302,11 @@ class ApiClient {
     const qs = q.toString()
     const endpoint = `/api/jobs/list${qs ? `?${qs}` : ''}`
 
+    // Rolling freshness filters are time-sensitive: never serve a 10-minute cache.
+    if (params.posted_within && params.posted_within !== 'all') {
+      return this.request<JobsListResponse>(endpoint)
+    }
+
     // 10-minute sessionStorage cache — survives cold start, cleared on tab close
     const cacheKey = `jmi:${endpoint}`
     try {

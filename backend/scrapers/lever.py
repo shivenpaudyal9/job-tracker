@@ -95,7 +95,7 @@ def scrape(companies: list[str] = COMPANIES) -> list[dict]:
                     "location": location,
                     "remote": remote,
                     "description_raw": description,
-                    "posted_at": None,
+                    "posted_at": job.get("createdAt"),  # Lever returns Unix milliseconds
                 })
                 count += 1
 

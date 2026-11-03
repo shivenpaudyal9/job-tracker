@@ -4,6 +4,7 @@ Called by the daily scrape cron job.
 """
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
 from scrapers import greenhouse, lever, linkedin, ashby
@@ -31,29 +32,25 @@ def run_all(
             added += 1
         logger.info("%s: %d unique postings collected", source, added)
 
-    if run_greenhouse:
-        try:
-            _add(greenhouse.scrape(), "Greenhouse")
-        except Exception as e:
-            logger.error("Greenhouse scraper failed: %s", e)
-
-    if run_lever:
-        try:
-            _add(lever.scrape(), "Lever")
-        except Exception as e:
-            logger.error("Lever scraper failed: %s", e)
-
-    if run_linkedin:
-        try:
-            _add(linkedin.scrape(), "LinkedIn")
-        except Exception as e:
-            logger.error("LinkedIn scraper failed: %s", e)
-
-    if run_ashby:
-        try:
-            _add(ashby.scrape(), "Ashby")
-        except Exception as e:
-            logger.error("Ashby scraper failed: %s", e)
+    # Boards are independent. Run at most three provider loops concurrently;
+    # each provider still honors its own per-company delay/rate limit.
+    providers = [
+        ("Greenhouse", greenhouse.scrape, run_greenhouse),
+        ("Lever", lever.scrape, run_lever),
+        ("LinkedIn", linkedin.scrape, run_linkedin),
+        ("Ashby", ashby.scrape, run_ashby),
+    ]
+    enabled = [(name, scrape_fn) for name, scrape_fn, on in providers if on]
+    if enabled:
+        with ThreadPoolExecutor(max_workers=min(3, len(enabled))) as pool:
+            pending = {pool.submit(fn): name for name, fn in enabled}
+            for future in as_completed(pending):
+                name = pending[future]
+                try:
+                    # Merge and deduplicate on the calling thread, never inside workers.
+                    _add(future.result(), name)
+                except Exception as e:
+                    logger.error("%s scraper failed: %s", name, e)
 
     logger.info("Total unique postings from all sources: %d", len(all_postings))
     return all_postings

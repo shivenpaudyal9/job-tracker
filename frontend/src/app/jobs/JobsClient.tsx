@@ -72,12 +72,12 @@ function FreshnessBanner({ stats }: { stats: any }) {
     <div className="flex items-center justify-between text-xs px-3 py-2 rounded-lg bg-foreground-muted/5 border border-foreground-muted/10 mb-4">
       <div className="flex items-center gap-1.5">
         <Clock className="w-3 h-3 text-foreground-muted" />
-        <span className="text-foreground-muted">Last scrape: <span className="text-foreground-secondary">{agoText}</span></span>
+        <span className="text-foreground-muted">Latest listing indexed: <span className="text-foreground-secondary">{agoText}</span></span>
       </div>
       <div className="text-foreground-muted">
-        <span className="text-green-400 font-medium">{stats.jobs_last_4h ?? 0}</span> new in 4h
+        <span className="text-green-400 font-medium">{stats.jobs_last_4h ?? 0}</span> posted in 4h
         {' · '}
-        <span className="text-primary-400 font-medium">{stats.jobs_last_24h ?? 0}</span> today
+        <span className="text-primary-400 font-medium">{stats.jobs_last_24h ?? 0}</span> posted in 24h
       </div>
     </div>
   )
@@ -345,14 +345,14 @@ export default function JobsPageClient() {
               <Briefcase className="w-10 h-10 text-foreground-muted mx-auto mb-3" />
               {postedWithin === '4h' ? (
                 <>
-                  <p className="text-foreground-secondary font-medium">No new jobs in the last 4 hours.</p>
-                  <p className="text-foreground-muted text-sm mt-1">The scraper runs every 4h — try "Last 24h" or "Last 7 days".</p>
+                  <p className="text-foreground-secondary font-medium">No employer-published jobs found in the last 4 hours.</p>
+                  <p className="text-foreground-muted text-sm mt-1">Try "Last 24h" or "Last 7 days"; jobs without publication dates are excluded.</p>
                   <button onClick={() => { applyFilter(() => setPostedWithin('24h')) }} className="mt-3 text-primary-400 text-sm hover:underline">Show last 24h</button>
                 </>
               ) : postedWithin === '24h' ? (
                 <>
-                  <p className="text-foreground-secondary font-medium">No new jobs scraped today yet.</p>
-                  <p className="text-foreground-muted text-sm mt-1">The scraper runs every 4 hours — check back soon.</p>
+                  <p className="text-foreground-secondary font-medium">No employer-published jobs found in the last 24 hours.</p>
+                  <p className="text-foreground-muted text-sm mt-1">Jobs without a publication timestamp are excluded from freshness filters.</p>
                   <button onClick={resetFilters} className="mt-3 text-primary-400 text-sm hover:underline">Reset filters</button>
                 </>
               ) : (

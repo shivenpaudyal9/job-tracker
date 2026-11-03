@@ -61,6 +61,8 @@ class ExtractedData:
     # Metadata
     extraction_method: str = "rule_based"  # "rule_based" or "llm_fallback"
     parser_version: str = "1.0.0"
+    is_job_related: Optional[bool] = None
+    needs_manual_review: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON storage"""
@@ -82,6 +84,8 @@ class ExtractedData:
             'overall_confidence': self.overall_confidence,
             'extraction_method': self.extraction_method,
             'parser_version': self.parser_version,
+            'is_job_related': self.is_job_related,
+            'needs_manual_review': self.needs_manual_review,
         }
         return data
 
@@ -164,7 +168,20 @@ class JobEmailExtractor:
         # If confidence too low, try LLM fallback (use LLM more aggressively)
         if result.overall_confidence < 0.85 and self.llm_client:
             llm_result = self._extract_llm_fallback(subject, body, from_address)
-            if llm_result and llm_result.overall_confidence > result.overall_confidence:
+            if llm_result and llm_result.is_job_related is False:
+                # Relevance is a distinct decision, not an extraction confidence.
+                # Contradictory evidence must not automatically update an application.
+                has_rule_signal = (
+                    result.email_type != EmailType.UNKNOWN
+                    or bool(result.company_name or result.job_title)
+                )
+                if has_rule_signal:
+                    result.needs_manual_review = True
+                    result.extraction_method = "rule_llm_relevance_conflict"
+                else:
+                    result = llm_result
+            elif (llm_result and llm_result.is_job_related is True
+                  and llm_result.overall_confidence > result.overall_confidence):
                 result = llm_result
 
         return result
@@ -791,13 +808,18 @@ Return null for fields you truly cannot determine."""
                 else:
                     return None
 
+            # Refuse malformed relevance decisions; missing is not True.
+            if not isinstance(data.get('is_job_related'), bool):
+                return None
+
             # Skip non-job-related emails
-            if not data.get('is_job_related', True):
+            if data['is_job_related'] is False:
                 return ExtractedData(
                     company_name=None,
                     job_title=None,
                     status=ApplicationStatus.OTHER_UPDATE,
                     extraction_method="llm_groq_skipped",
+                    is_job_related=False,
                     overall_confidence=0.0
                 )
 
@@ -822,6 +844,7 @@ Return null for fields you truly cannot determine."""
                 action_required=data.get('action_required', False),
                 action_description=data.get('action_description') if data.get('action_description') not in [None, 'null', ''] else None,
                 extraction_method="llm_groq",
+                is_job_related=True,
                 company_confidence=0.9 if data.get('company_name') else 0.0,
                 job_title_confidence=0.9 if data.get('job_title') else 0.0,
                 overall_confidence=0.9
