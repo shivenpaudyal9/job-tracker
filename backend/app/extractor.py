@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 import hashlib
 from app.models import ApplicationStatus, ActionType, EmailType, LinkType
+from llm.model_select import pick_model as _pick_groq_model
 
 
 @dataclass
@@ -773,7 +774,7 @@ CRITICAL INSTRUCTIONS:
 Return null for fields you truly cannot determine."""
 
             response = self.llm_client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model=_pick_groq_model(self.llm_client, "llama-3.1-8b-instant", fast=True),
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=500,
                 temperature=0.1

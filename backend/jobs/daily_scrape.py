@@ -102,6 +102,50 @@ def _upsert_skill_trend(db, skill: str, week_start: date, role_category: str):
         ))
 
 
+def _backfill_extraction(db, limit: int = 300):
+    """Re-run LLM extraction for postings saved without it (LLM was down)."""
+    pending = (
+        db.query(JobPosting)
+        .filter(JobPosting.seniority.is_(None), JobPosting.salary_currency == "USD")
+        .order_by(JobPosting.scraped_at.desc())
+        .limit(limit * 3)
+        .all()
+    )
+    pending = [j for j in pending if not j.skills_required][:limit]
+    if not pending:
+        return
+    logger.info("Backfilling extraction for %d postings", len(pending))
+    done = misses = 0
+    for job in pending:
+        try:
+            extracted = extract(job.title, job.company, job.description_raw or "")
+        except Exception as e:
+            logger.error("Backfill extraction crashed: %s", e)
+            extracted = None
+        if not extracted:
+            misses += 1
+            if misses >= 5:
+                logger.warning("Backfill stopped: LLM extraction keeps failing")
+                break
+            continue
+        misses = 0
+        job.skills_required = extracted.get("skills_required", [])
+        job.skills_nice_to_have = extracted.get("skills_nice_to_have", [])
+        job.seniority = extracted.get("seniority") or "unknown"
+        job.salary_min = extracted.get("salary_min")
+        job.salary_max = extracted.get("salary_max")
+        job.salary_currency = extracted.get("salary_currency") or "USD"
+        job.visa_sponsorship = extracted.get("visa_sponsorship")
+        job.role_category = extracted.get("role_category") or job.role_category
+        if job.description_embedding is None:
+            job.description_embedding = embed(job.description_raw or "")
+        done += 1
+        if done % 20 == 0:
+            db.commit()
+    db.commit()
+    logger.info("Backfill complete: %d postings updated", done)
+
+
 def run():
     logger.info("=== Daily scrape started ===")
     db = SessionLocal()
@@ -211,6 +255,14 @@ def run():
                     ))
 
         db.commit()
+
+        # 5. Fill in postings that were saved while the LLM was unavailable
+        try:
+            _backfill_extraction(db)
+        except Exception as e:
+            db.rollback()
+            logger.error("Backfill failed: %s", e)
+
         logger.info(
             "=== Daily scrape complete: %d scraped, %d new inserted, %d failed extraction ===",
             len(raw_postings), inserted, failed_extraction,
