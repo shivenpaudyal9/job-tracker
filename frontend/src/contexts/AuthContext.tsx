@@ -3,7 +3,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { User, AuthToken, LoginRequest, RegisterRequest } from '@/types/api'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+// Route through the Next.js API proxy (same as lib/api.ts) so the browser never
+// calls the backend cross-origin — avoids CORS / CSP / mixed-content "Failed to fetch".
+const API_BASE_URL = '/api/proxy'
 
 interface AuthContextType {
   user: User | null

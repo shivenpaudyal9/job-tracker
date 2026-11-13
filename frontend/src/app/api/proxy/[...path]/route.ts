@@ -25,11 +25,20 @@ async function handler(
     }
   }
 
-  const upstream = await fetch(url, {
-    method: req.method,
-    headers: forwardHeaders,
-    body,
-  })
+  let upstream: Response
+  try {
+    upstream = await fetch(url, {
+      method: req.method,
+      headers: forwardHeaders,
+      body,
+    })
+  } catch (err) {
+    console.error(`Proxy could not reach backend at ${BACKEND}:`, err)
+    return NextResponse.json(
+      { detail: 'Backend is unreachable. It may be waking up — please try again in a minute.' },
+      { status: 502 }
+    )
+  }
 
   const data = await upstream.arrayBuffer()
   return new NextResponse(data, {
