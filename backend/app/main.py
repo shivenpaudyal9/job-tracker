@@ -26,7 +26,7 @@ Endpoints:
 from fastapi import FastAPI, Depends, HTTPException, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, text
 from typing import List, Optional
 from datetime import datetime, timezone
 import logging
@@ -153,12 +153,29 @@ def root():
 
 @app.get("/health")
 def health_check():
-    """Detailed health check"""
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "database": "connected"
-    }
+    """Detailed health check — actually queries the database.
+
+    This also counts as database activity, so the keep-alive workflow
+    stops a free Supabase project from being paused for inactivity.
+    """
+    from fastapi.responses import JSONResponse
+
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        db_status, ok = "connected", True
+    except Exception as e:
+        logger.error("Health check DB query failed: %s", e)
+        db_status, ok = f"error: {type(e).__name__}", False
+
+    return JSONResponse(
+        status_code=200 if ok else 503,
+        content={
+            "status": "healthy" if ok else "unhealthy",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "database": db_status,
+        },
+    )
 
 
 # Application endpoints
