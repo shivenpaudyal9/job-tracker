@@ -1,0 +1,23 @@
+name: Backend Ping
+
+# Keeps the Render backend awake, keeps the Supabase database active
+# (/health runs a real query), and asks the backend to scrape jobs.
+# The backend itself limits scrapes to one every 4 hours.
+# Uses only the public site URL, so it needs no repository secrets.
+
+on:
+  schedule:
+    - cron: '*/14 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SITE: https://job-tracker-orpin-pi.vercel.app/api/proxy
+    steps:
+      - name: Health check
+        run: curl -s --max-time 120 -w "\n%{http_code}\n" "$SITE/health" || true
+      - name: Ask backend to scrape if due
+        run: curl -s --max-time 120 -X POST -w "\n%{http_code}\n" "$SITE/api/scrape/trigger" || true
