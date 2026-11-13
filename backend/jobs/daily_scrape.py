@@ -128,7 +128,11 @@ def run():
             description = posting.get("description_raw", "")
 
             # LLM extraction
-            extracted = extract(title, company, description)
+            try:
+                extracted = extract(title, company, description)
+            except Exception as e:
+                logger.error("Extraction crashed for '%s': %s", title, e)
+                extracted = None
             if not extracted:
                 failed_extraction += 1
                 # Still insert with minimal data
@@ -176,6 +180,10 @@ def run():
             )
             db.add(job)
             inserted += 1
+            # Commit in batches so an interrupted run keeps its progress.
+            if inserted % 20 == 0:
+                db.commit()
+                logger.info("Committed %d/%d new postings", inserted, len(new_postings))
 
             # Track skills for trend update
             role_cat = extracted.get("role_category", "ml_engineer")

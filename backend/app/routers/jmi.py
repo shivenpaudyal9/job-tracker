@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.jmi_models import JobPosting, SkillTrend, WeeklyReport, ResumeMatch, PGVECTOR_AVAILABLE
 from app.demo_loader import get_demo_jobs, total_demo_count
+from app.scrape_trigger import maybe_start_scrape
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["JMI Public"])
@@ -79,6 +80,8 @@ def _data_source_label(real_count: int, last_scrape) -> dict:
 
 @router.get("/stats")
 def public_stats(request: Request, db: Session = Depends(get_db)):
+    # Kick off a background scrape if the last one is older than the interval.
+    maybe_start_scrape()
     try:
         real_count = db.query(func.count(JobPosting.id)).scalar() or 0
         now = datetime.utcnow()
@@ -112,6 +115,12 @@ def public_stats(request: Request, db: Session = Depends(get_db)):
         "last_scrape_at": last_scrape.isoformat() if last_scrape else None,
         **_data_source_label(real_count, last_scrape),
     }
+
+
+@router.post("/scrape/trigger")
+def trigger_scrape():
+    """Start a job scrape if none ran recently. Safe to call from a cron ping."""
+    return {"scrape": maybe_start_scrape()}
 
 
 # ── /api/trends/weekly ────────────────────────────────────────────────────────
