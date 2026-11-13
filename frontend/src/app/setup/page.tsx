@@ -101,7 +101,7 @@ function SetupContent() {
     setError(null)
 
     try {
-      await api.runSync(30)
+      await api.runSync(365)
       toast.success('Sync started! Processing your emails...')
 
       // Poll for sync completion
@@ -306,7 +306,7 @@ function SetupContent() {
                   </div>
                   <h2 className="text-2xl font-bold mb-2">Run First Sync</h2>
                   <p className="text-foreground-secondary">
-                    Fetch and process your job emails from the last 30 days
+                    Fetch and process your job emails from the last 12 months
                   </p>
                 </div>
 
