@@ -139,6 +139,7 @@ def _build_report(db) -> dict:
 def _generate_narrative(report: dict) -> str:
     try:
         from groq import Groq
+        from llm.model_select import pick_model
         client = Groq(api_key=os.environ["GROQ_API_KEY"])
 
         top_skills = ", ".join(s["skill"] for s in report["top_skills"][:10])
@@ -161,7 +162,7 @@ Paragraph 3: Strategic advice for job seekers this week.
 Write in professional but conversational tone. Be specific and data-driven."""
 
         resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=pick_model(client, "llama-3.3-70b-versatile"),
             messages=[{"role": "user", "content": prompt}],
             temperature=0.4,
             max_tokens=600,

@@ -13,10 +13,13 @@ import numpy as np
 logger = logging.getLogger(__name__)
 EMBEDDING_DIM = 384
 
-_HF_URL = (
-    "https://api-inference.huggingface.co"
-    "/pipeline/feature-extraction"
+# The old api-inference.huggingface.co host was shut down; inference now
+# goes through the router. The router requires an HF_TOKEN.
+_HF_URL = os.getenv(
+    "HF_EMBEDDING_URL",
+    "https://router.huggingface.co/hf-inference/models"
     "/sentence-transformers/all-MiniLM-L6-v2"
+    "/pipeline/feature-extraction",
 )
 _HF_TOKEN = os.getenv("HF_TOKEN", "")
 
