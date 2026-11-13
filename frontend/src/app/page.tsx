@@ -378,7 +378,7 @@ export default function LandingPage() {
                 {
                   step: 4,
                   title: 'Sync and track',
-                  desc: 'We fetch your last 30 days of job emails, extract application details with AI, and populate your dashboard automatically.',
+                  desc: 'We fetch your last 12 months of job emails, extract application details with AI, and populate your dashboard automatically.',
                   icon: CheckCircle2,
                 },
               ].map(({ step, title, desc, icon: Icon }) => (

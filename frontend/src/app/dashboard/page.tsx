@@ -97,7 +97,7 @@ function DashboardContent() {
 
   // Mutations
   const syncMutation = useMutation({
-    mutationFn: () => api.runSync(30),
+    mutationFn: () => api.runSync(365),
     onSuccess: () => {
       toast.success('Sync started! Processing emails...')
       setIsSyncing(true)

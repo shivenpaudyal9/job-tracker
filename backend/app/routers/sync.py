@@ -382,7 +382,7 @@ async def run_sync(
             )
 
             all_emails = []
-            while query and len(all_emails) < 200:
+            while query and len(all_emails) < 1000:
                 response = requests.get(query, headers=headers)
                 if response.status_code != 200:
                     break
