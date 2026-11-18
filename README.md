@@ -503,8 +503,4 @@ Follow the [Installation](#-installation) section above to run on your machine.
 
 MIT License - Free to use and modify
 
-## 🙏 Acknowledgments
 
-Built with Claude Code by Anthropic
-Microsoft Graph API for email access
-Next.js and FastAPI frameworks
